@@ -112,8 +112,8 @@ cd ~/ETV
 14. Clone dự án `mmDetection 2.11.0` và dự án `mmOCR 0.2.0` về và cài đặt
 
 ```bash
-git clone https://github.com/open-mmlab/mmdetection.git
-git clone https://github.com/open-mmlab/mmocr.git
+git clone --branch v2.11.0 https://github.com/open-mmlab/mmdetection.git
+git clone --branch v0.2.0 https://github.com/open-mmlab/mmocr.git
 cd mmdetection
 pip install -v -e .
 cd ../mmocr
