@@ -92,21 +92,24 @@ mim install mmengine
 11. **Cài đặt mmCV (OpenMMLab Computer Vision Foundation):**
 
 ```bash
-mim install mmcv==2.1.0
+mim install mmcv==1.2.4
 ```
-Khi cài mmDetection thì nó yêu cầu mmcv<2.2.0,>=2.0.0rc4 nếu không là nó báo lỗi
+Khi cài mmDetection 2.11.0 thì nó yêu cầu mmcv-full>= 1.2.4, <1.4.0 nếu không là nó báo lỗi.
 
-ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-mmdet 3.3.0 requires mmcv<2.2.0,>=2.0.0rc4; extra == "mim", but you have mmcv 2.2.0 which is incompatible.
+12. **Cài đặt cpython để hỗ trợ biên dịch các gói Python:**
 
-12. Tạo thư mục dự án ETV (End to End Table Vision)
+```bash
+conda install -c conda-forge cython
+```
+
+13. Tạo thư mục dự án ETV (End to End Table Vision)
 
 ```bash
 mkdir ~/ETV
 cd ~/ETV
 ```
 
-13. Clone dự án mmDetection và dự án mmOCR về và cài đặt
+14. Clone dự án `mmDetection 2.11.0` và dự án `mmOCR 0.2.0` về và cài đặt
 
 ```bash
 git clone https://github.com/open-mmlab/mmdetection.git
