@@ -35,6 +35,7 @@ dpkg -l | grep nccl
 3. **Xóa môi trường Conda cũ (nếu có):**
 
 ```bash
+conda deactivate
 conda env remove -n myenv
 ```
 
@@ -49,10 +50,13 @@ conda create -n myenv python=3.8 -y
 conda activate myenv
 ```
 
-6. **Cài PyTorch hỗ trợ CUDA 11.8:**
+6. **Cài PyTorch hỗ trợ CUDA 11.1:**
 
 ```bash
-pip install torch==2.1.0+cu118 torchvision==0.16.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
+pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
+# Install cudnn if necessary.
+conda install cudnn -c conda-forge
+
 ```
 
 Sử dụng phiên bản 2.1.0 để phù hợp với mmcv 2.1.0 chứ không nó phải lên 2.2.0 mới phù hợp và như vậy thì lại không cài được mmDetection.
@@ -67,14 +71,11 @@ import torch
 print(torch.__version__)
 print(torch.cuda.is_available())
 print(torch.cuda.get_device_name(0))
-```
-Nếu bạn thấy phiên bản PyTorch và thông tin GPU, thì cài đặt đã thành công.
+print(torch.backends.cudnn.enabled)
+print(torch.backends.cudnn.version())
 
-8. **Cài đặt cuDNN (NVIDIA CUDA Deep Neural Network library): (Option)**
-
-```bash
-conda install cudnn -c conda-forge
 ```
+Nếu thấy phiên bản PyTorch và thông tin GPU, thì cài đặt đã thành công Pytorch và CUDA, nếu cài đặt cuDNN thì cũng sẽ có thông tin về cuDNN (tang cường hiệu suất cho các mô hình học sâu).
 
 9. **Cài đặt openMim để quản lý các mô hình và công cụ của MMDetection:**
 
