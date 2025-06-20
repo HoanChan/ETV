@@ -108,6 +108,12 @@ conda install -c conda-forge cython
 mkdir ~/ETV
 cd ~/ETV
 ```
+14. Cài cpython để hỗ trợ biên dịch các gói Python:
+
+```bash
+pip install cython==0.29.33
+```
+dùng đúng phiên bản 0.29.33 để tương thích với mmcv 1.2.4 và mmDetection 2.11.0.
 
 14. Clone dự án `mmDetection 2.11.0` và dự án `mmOCR 0.2.0` về và cài đặt
 
