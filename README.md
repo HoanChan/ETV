@@ -119,3 +119,44 @@ pip install -v -e .
 cd ../mmocr
 pip install -v -e .
 ```
+# Tải dataset
+
+Cài đặt gdown để tải file từ Google Drive
+```bash
+pip install gdown
+```
+
+## Tải Dataset ViTabNet
+
+Chạy lệnh sau để tải dataset ViTabNet (đã preprocess) về:
+```bash
+curl -L -o vitabset.zip 'https://docs.google.com/uc?export=download&id=1dwbYq5nbUj_0rqiGeuCjGRGwHKiKs2VR'
+```
+hoặc
+```bash
+wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1dwbYq5nbUj_0rqiGeuCjGRGwHKiKs2VR' -O vitabset.zip
+```
+
+Sau đó giải nén bằng cách chạy lệnh:
+
+```bash
+unzip vitabset.zip
+```
+
+## Tải Dataset ViTabNet đã Preprecessing
+
+Chạy lệnh sau để tải dataset ViTabNet (đã preprocess) về:
+```bash
+curl -L -o vitabset_preprocess.zip 'https://docs.google.com/uc?export=download&id=1o_fCCeYqv3_j2ccbP4oEpC4kVZr480PS'
+```
+hoặc
+```bash
+wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1o_fCCeYqv3_j2ccbP4oEpC4kVZr480PS' -O vitabset_preprocess.zip
+```
+
+Sau đó giải nén bằng cách chạy lệnh:
+
+```bash
+unzip vitabset_preprocess.zip -d /preprocess/
+```
+
