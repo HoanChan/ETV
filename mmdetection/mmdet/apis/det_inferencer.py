@@ -2,13 +2,12 @@
 import copy
 import os.path as osp
 import warnings
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 
 import mmcv
 import mmengine
 import numpy as np
 import torch.nn as nn
-from mmcv.transforms import LoadImageFromFile
 from mmengine.dataset import Compose
 from mmengine.fileio import (get_file_backend, isdir, join_path,
                              list_dir_or_file)
@@ -79,7 +78,7 @@ class DetInferencer(BaseInferencer):
     postprocess_kwargs: set = {
         'print_result',
         'pred_out_dir',
-        'return_datasamples',
+        'return_datasample',
         'no_save_pred',
     }
 
@@ -166,22 +165,21 @@ class DetInferencer(BaseInferencer):
                 meta_key for meta_key in pipeline_cfg[-1]['meta_keys']
                 if meta_key != 'img_id')
 
-        load_img_idx = self._get_transform_idx(
-            pipeline_cfg, ('LoadImageFromFile', LoadImageFromFile))
+        load_img_idx = self._get_transform_idx(pipeline_cfg,
+                                               'LoadImageFromFile')
         if load_img_idx == -1:
             raise ValueError(
                 'LoadImageFromFile is not found in the test pipeline')
         pipeline_cfg[load_img_idx]['type'] = 'mmdet.InferencerLoader'
         return Compose(pipeline_cfg)
 
-    def _get_transform_idx(self, pipeline_cfg: ConfigType,
-                           name: Union[str, Tuple[str, type]]) -> int:
+    def _get_transform_idx(self, pipeline_cfg: ConfigType, name: str) -> int:
         """Returns the index of the transform in a pipeline.
 
         If the transform is not found, returns -1.
         """
         for i, transform in enumerate(pipeline_cfg):
-            if transform['type'] in name:
+            if transform['type'] == name:
                 return i
         return -1
 
@@ -305,7 +303,7 @@ class DetInferencer(BaseInferencer):
             no_save_vis: bool = False,
             draw_pred: bool = True,
             pred_score_thr: float = 0.3,
-            return_datasamples: bool = False,
+            return_datasample: bool = False,
             print_result: bool = False,
             no_save_pred: bool = True,
             out_dir: str = '',
@@ -313,10 +311,8 @@ class DetInferencer(BaseInferencer):
             texts: Optional[Union[str, list]] = None,
             # by open panoptic task
             stuff_texts: Optional[Union[str, list]] = None,
-            # by GLIP and Grounding DINO
+            # by GLIP
             custom_entities: bool = False,
-            # by Grounding DINO
-            tokens_positive: Optional[Union[int, list]] = None,
             **kwargs) -> dict:
         """Call the inferencer.
 
@@ -332,20 +328,20 @@ class DetInferencer(BaseInferencer):
                 Defaults to True.
             pred_score_thr (float): Minimum score of bboxes to draw.
                 Defaults to 0.3.
-            return_datasamples (bool): Whether to return results as
+            return_datasample (bool): Whether to return results as
                 :obj:`DetDataSample`. Defaults to False.
             print_result (bool): Whether to print the inference result w/o
                 visualization to the console. Defaults to False.
             no_save_pred (bool): Whether to force not to save prediction
                 results. Defaults to True.
-            out_dir: Dir to save the inference results or
+            out_file: Dir to save the inference results or
                 visualization. If left as empty, no file will be saved.
                 Defaults to ''.
             texts (str | list[str]): Text prompts. Defaults to None.
             stuff_texts (str | list[str]): Stuff text prompts of open
                 panoptic task. Defaults to None.
             custom_entities (bool): Whether to use custom entities.
-                Defaults to False. Only used in GLIP and Grounding DINO.
+                Defaults to False. Only used in GLIP.
             **kwargs: Other keyword arguments passed to :meth:`preprocess`,
                 :meth:`forward`, :meth:`visualize` and :meth:`postprocess`.
                 Each key in kwargs should be in the corresponding set of
@@ -368,10 +364,6 @@ class DetInferencer(BaseInferencer):
             texts = [texts] * len(ori_inputs)
         if stuff_texts is not None and isinstance(stuff_texts, str):
             stuff_texts = [stuff_texts] * len(ori_inputs)
-
-        # Currently only supports bs=1
-        tokens_positive = [tokens_positive] * len(ori_inputs)
-
         if texts is not None:
             assert len(texts) == len(ori_inputs)
             for i in range(len(texts)):
@@ -379,15 +371,13 @@ class DetInferencer(BaseInferencer):
                     ori_inputs[i] = {
                         'text': texts[i],
                         'img_path': ori_inputs[i],
-                        'custom_entities': custom_entities,
-                        'tokens_positive': tokens_positive[i]
+                        'custom_entities': custom_entities
                     }
                 else:
                     ori_inputs[i] = {
                         'text': texts[i],
                         'img': ori_inputs[i],
-                        'custom_entities': custom_entities,
-                        'tokens_positive': tokens_positive[i]
+                        'custom_entities': custom_entities
                     }
         if stuff_texts is not None:
             assert len(stuff_texts) == len(ori_inputs)
@@ -415,7 +405,7 @@ class DetInferencer(BaseInferencer):
             results = self.postprocess(
                 preds,
                 visualization,
-                return_datasamples=return_datasamples,
+                return_datasample=return_datasample,
                 print_result=print_result,
                 no_save_pred=no_save_pred,
                 pred_out_dir=out_dir,
@@ -508,7 +498,7 @@ class DetInferencer(BaseInferencer):
         self,
         preds: PredType,
         visualization: Optional[List[np.ndarray]] = None,
-        return_datasamples: bool = False,
+        return_datasample: bool = False,
         print_result: bool = False,
         no_save_pred: bool = False,
         pred_out_dir: str = '',
@@ -526,7 +516,7 @@ class DetInferencer(BaseInferencer):
         Args:
             preds (List[:obj:`DetDataSample`]): Predictions of the model.
             visualization (Optional[np.ndarray]): Visualized predictions.
-            return_datasamples (bool): Whether to use Datasample to store
+            return_datasample (bool): Whether to use Datasample to store
                 inference results. If False, dict will be used.
             print_result (bool): Whether to print the inference result w/o
                 visualization to the console. Defaults to False.
@@ -543,7 +533,7 @@ class DetInferencer(BaseInferencer):
             - ``visualization`` (Any): Returned by :meth:`visualize`.
             - ``predictions`` (dict or DataSample): Returned by
                 :meth:`forward` and processed in :meth:`postprocess`.
-                If ``return_datasamples=False``, it usually should be a
+                If ``return_datasample=False``, it usually should be a
                 json-serializable dict containing only basic data elements such
                 as strings and numbers.
         """
@@ -552,14 +542,14 @@ class DetInferencer(BaseInferencer):
 
         result_dict = {}
         results = preds
-        if not return_datasamples:
+        if not return_datasample:
             results = []
             for pred in preds:
                 result = self.pred2dict(pred, pred_out_dir)
                 results.append(result)
         elif pred_out_dir != '':
             warnings.warn('Currently does not support saving datasample '
-                          'when return_datasamples is set to True. '
+                          'when return_datasample is set to True. '
                           'Prediction results are not saved!')
         # Add img to the results after printing and dumping
         result_dict['predictions'] = results

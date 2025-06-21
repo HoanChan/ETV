@@ -129,7 +129,6 @@ class CocoDataset(BaseDetDataset):
 
         if self.return_classes:
             data_info['text'] = self.metainfo['classes']
-            data_info['caption_prompt'] = self.caption_prompt
             data_info['custom_entities'] = True
 
         instances = []

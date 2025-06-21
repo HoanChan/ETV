@@ -1,5 +1,3 @@
-# Note: This project has been deprecated, please use [Detic_new](../Detic_new).
-
 # Detecting Twenty-thousand Classes using Image-level Supervision
 
 ## Description

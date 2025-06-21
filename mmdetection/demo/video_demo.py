@@ -40,8 +40,7 @@ def main():
     model = init_detector(args.config, args.checkpoint, device=args.device)
 
     # build test pipeline
-    model.cfg.test_dataloader.dataset.pipeline[
-        0].type = 'mmdet.LoadImageFromNDArray'
+    model.cfg.test_dataloader.dataset.pipeline[0].type = 'LoadImageFromNDArray'
     test_pipeline = Compose(model.cfg.test_dataloader.dataset.pipeline)
 
     # init visualizer

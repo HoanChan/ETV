@@ -204,6 +204,9 @@ cd ../mmocr
 pip install -v -e .
 ```
 
+Lưu ý phiên bản mmDetection và mmOCR phải tương thích với nhau:
+MMDetection 3.3.0 is incompatible with MMOCR 1.0.1. Please use MMDetection >= 3.0.0rc5, < 3.2.0 instead
+
 </details>
 </details>
 <details>
