@@ -1,6 +1,5 @@
-albumentations>=0.3.2
 cityscapesscripts
+emoji
+fairscale
 imagecorruptions
-mmlvis
-scipy
-sklearn
+scikit-learn

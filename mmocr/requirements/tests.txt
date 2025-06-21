@@ -1,10 +1,12 @@
 asynctest
 codecov
 flake8
+interrogate
 isort
 # Note: used for kwarray.group_items, this may be ported to mmcv in the future.
 kwarray
-Polygon3
+lanms-neo==1.0.2
+parameterized
 pytest
 pytest-cov
 pytest-runner

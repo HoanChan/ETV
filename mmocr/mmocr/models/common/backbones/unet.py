@@ -1,14 +1,12 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as cp
-from mmcv.cnn import (UPSAMPLE_LAYERS, ConvModule, build_activation_layer,
-                      build_norm_layer, build_upsample_layer, constant_init,
-                      kaiming_init)
-from mmcv.runner import load_checkpoint
-from mmcv.utils.parrots_wrapper import _BatchNorm
+from mmcv.cnn import ConvModule, build_norm_layer
+from mmengine.model import BaseModule
+from mmengine.utils.dl_utils.parrots_wrapper import _BatchNorm
 
-from mmdet.models.builder import BACKBONES
-from mmocr.utils import get_root_logger
+from mmocr.registry import MODELS
 
 
 class UpConvBlock(nn.Module):
@@ -81,13 +79,14 @@ class UpConvBlock(nn.Module):
             dcn=None,
             plugins=None)
         if upsample_cfg is not None:
-            self.upsample = build_upsample_layer(
-                cfg=upsample_cfg,
-                in_channels=in_channels,
-                out_channels=skip_channels,
-                with_cp=with_cp,
-                norm_cfg=norm_cfg,
-                act_cfg=act_cfg)
+            upsample_cfg.update(
+                dict(
+                    in_channels=in_channels,
+                    out_channels=skip_channels,
+                    with_cp=with_cp,
+                    norm_cfg=norm_cfg,
+                    act_cfg=act_cfg))
+            self.upsample = MODELS.build(upsample_cfg)
         else:
             self.upsample = ConvModule(
                 in_channels,
@@ -182,7 +181,7 @@ class BasicConvBlock(nn.Module):
         return out
 
 
-@UPSAMPLE_LAYERS.register_module()
+@MODELS.register_module()
 class DeconvModule(nn.Module):
     """Deconvolution upsample module in decoder for UNet (2X upsample).
 
@@ -231,7 +230,7 @@ class DeconvModule(nn.Module):
             padding=padding)
 
         _, norm = build_norm_layer(norm_cfg, out_channels)
-        activate = build_activation_layer(act_cfg)
+        activate = MODELS.build(act_cfg)
         self.deconv_upsamping = nn.Sequential(deconv, norm, activate)
 
     def forward(self, x):
@@ -244,7 +243,7 @@ class DeconvModule(nn.Module):
         return out
 
 
-@UPSAMPLE_LAYERS.register_module()
+@MODELS.register_module()
 class InterpConv(nn.Module):
     """Interpolation upsample module in decoder for UNet.
 
@@ -318,8 +317,8 @@ class InterpConv(nn.Module):
         return out
 
 
-@BACKBONES.register_module()
-class UNet(nn.Module):
+@MODELS.register_module()
+class UNet(BaseModule):
     """UNet backbone.
     U-Net: Convolutional Networks for Biomedical Image Segmentation.
     https://arxiv.org/pdf/1505.04597.pdf
@@ -391,8 +390,15 @@ class UNet(nn.Module):
                  upsample_cfg=dict(type='InterpConv'),
                  norm_eval=False,
                  dcn=None,
-                 plugins=None):
-        super().__init__()
+                 plugins=None,
+                 init_cfg=[
+                     dict(type='Kaiming', layer='Conv2d'),
+                     dict(
+                         type='Constant',
+                         layer=['_BatchNorm', 'GroupNorm'],
+                         val=1)
+                 ]):
+        super().__init__(init_cfg=init_cfg)
         assert dcn is None, 'Not implemented yet.'
         assert plugins is None, 'Not implemented yet.'
         assert len(strides) == num_stages, (
@@ -470,7 +476,7 @@ class UNet(nn.Module):
                     act_cfg=act_cfg,
                     dcn=None,
                     plugins=None))
-            self.encoder.append((nn.Sequential(*enc_conv_block)))
+            self.encoder.append(nn.Sequential(*enc_conv_block))
             in_channels = base_channels * 2**i
 
     def forward(self, x):
@@ -508,22 +514,3 @@ class UNet(nn.Module):
             f'downsample rate {whole_downsample_rate}, when num_stages is '
             f'{self.num_stages}, strides is {self.strides}, and downsamples '
             f'is {self.downsamples}.')
-
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone.
-
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-        if isinstance(pretrained, str):
-            logger = get_root_logger()
-            load_checkpoint(self, pretrained, strict=False, logger=logger)
-        elif pretrained is None:
-            for m in self.modules():
-                if isinstance(m, nn.Conv2d):
-                    kaiming_init(m)
-                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
-                    constant_init(m, 1)
-        else:
-            raise TypeError('pretrained must be a str or None')

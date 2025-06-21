@@ -65,7 +65,9 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+docs/en/_build/
+docs/zh_cn/_build/
+docs/*/api/generated/
 
 # PyBuilder
 target/
@@ -106,7 +108,7 @@ venv.bak/
 
 # cython generated cpp
 !data/dict
-data/*
+/data
 .vscode
 .idea
 
@@ -137,3 +139,8 @@ log.txt
 workspace.code-workspace
 results
 mmocr/core/font.TTF
+mmocr/.mim
+workdirs/
+.history/
+.dev/
+data/

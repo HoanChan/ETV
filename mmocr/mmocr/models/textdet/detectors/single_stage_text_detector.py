@@ -1,56 +1,127 @@
-from mmdet.models.builder import DETECTORS
-from mmdet.models.detectors import SingleStageDetector
+# Copyright (c) OpenMMLab. All rights reserved.
+from typing import Dict, Optional, Sequence
+
+import torch
+
+from mmocr.registry import MODELS
+from mmocr.structures import TextDetDataSample
+from .base import BaseTextDetector
 
 
-@DETECTORS.register_module()
-class SingleStageTextDetector(SingleStageDetector):
+@MODELS.register_module()
+class SingleStageTextDetector(BaseTextDetector):
     """The class for implementing single stage text detector.
 
-    It is the parent class of PANet, PSENet, and DBNet.
+    Single-stage text detectors directly and densely predict bounding boxes or
+    polygons on the output features of the backbone + neck (optional).
+
+    Args:
+        backbone (dict): Backbone config.
+        neck (dict, optional): Neck config. If None, the output from backbone
+            will be directly fed into ``det_head``.
+        det_head (dict): Head config.
+        data_preprocessor (dict, optional): Model preprocessing config
+            for processing the input image data. Keys allowed are
+            ``to_rgb``(bool), ``pad_size_divisor``(int), ``pad_value``(int or
+            float), ``mean``(int or float) and ``std``(int or float).
+            Preprcessing order: 1. to rgb; 2. normalization 3. pad.
+            Defaults to None.
+        init_cfg (dict or list[dict], optional): Initialization configs.
+            Defaults to None.
     """
 
     def __init__(self,
-                 backbone,
-                 neck,
-                 bbox_head,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None):
-        SingleStageDetector.__init__(self, backbone, neck, bbox_head,
-                                     train_cfg, test_cfg, pretrained)
+                 backbone: Dict,
+                 det_head: Dict,
+                 neck: Optional[Dict] = None,
+                 data_preprocessor: Optional[Dict] = None,
+                 init_cfg: Optional[Dict] = None) -> None:
+        super().__init__(
+            data_preprocessor=data_preprocessor, init_cfg=init_cfg)
+        assert det_head is not None, 'det_head cannot be None!'
+        self.backbone = MODELS.build(backbone)
+        if neck is not None:
+            self.neck = MODELS.build(neck)
+        self.det_head = MODELS.build(det_head)
 
-    def forward_train(self, img, img_metas, **kwargs):
-        """
+    def extract_feat(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Extract features.
+
         Args:
-            img (Tensor): Input images of shape (N, C, H, W).
+            inputs (Tensor): Image tensor with shape (N, C, H ,W).
+
+        Returns:
+            Tensor or tuple[Tensor]: Multi-level features that may have
+            different resolutions.
+        """
+        inputs = self.backbone(inputs)
+        if self.with_neck:
+            inputs = self.neck(inputs)
+        return inputs
+
+    def loss(self, inputs: torch.Tensor,
+             data_samples: Sequence[TextDetDataSample]) -> Dict:
+        """Calculate losses from a batch of inputs and data samples.
+
+        Args:
+            inputs (torch.Tensor): Input images of shape (N, C, H, W).
                 Typically these should be mean centered and std scaled.
-            img_metas (list[dict]): A list of image info dict where each dict
-                has: 'img_shape', 'scale_factor', 'flip', and may also contain
-                'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
-                For details on the values of these keys, see
-                :class:`mmdet.datasets.pipelines.Collect`.
+            data_samples (list[TextDetDataSample]): A list of N
+                datasamples, containing meta information and gold annotations
+                for each of the images.
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
-        x = self.extract_feat(img)
-        preds = self.bbox_head(x)
-        losses = self.bbox_head.loss(preds, **kwargs)
-        return losses
+        inputs = self.extract_feat(inputs)
+        return self.det_head.loss(inputs, data_samples)
 
-    def simple_test(self, img, img_metas, rescale=False):
-        x = self.extract_feat(img)
-        outs = self.bbox_head(x)
+    def predict(self, inputs: torch.Tensor,
+                data_samples: Sequence[TextDetDataSample]
+                ) -> Sequence[TextDetDataSample]:
+        """Predict results from a batch of inputs and data samples with post-
+        processing.
 
-        if len(img_metas) > 1:
-            boundaries = [
-                self.bbox_head.get_boundary(*(outs[i].unsqueeze(0)),
-                                            [img_metas[i]], rescale)
-                for i in range(len(img_metas))
-            ]
+        Args:
+            inputs (torch.Tensor): Images of shape (N, C, H, W).
+            data_samples (list[TextDetDataSample]): A list of N
+                datasamples, containing meta information and gold annotations
+                for each of the images.
 
-        else:
-            boundaries = [
-                self.bbox_head.get_boundary(*outs, img_metas, rescale)
-            ]
+        Returns:
+            list[TextDetDataSample]: A list of N datasamples of prediction
+            results.  Each DetDataSample usually contain
+            'pred_instances'. And the ``pred_instances`` usually
+            contains following keys.
 
-        return boundaries
+                - scores (Tensor): Classification scores, has a shape
+                    (num_instance, )
+                - labels (Tensor): Labels of bboxes, has a shape
+                    (num_instances, ).
+                - bboxes (Tensor): Has a shape (num_instances, 4),
+                    the last dimension 4 arrange as (x1, y1, x2, y2).
+                - polygons (list[np.ndarray]): The length is num_instances.
+                    Each element represents the polygon of the
+                    instance, in (xn, yn) order.
+        """
+        x = self.extract_feat(inputs)
+        return self.det_head.predict(x, data_samples)
+
+    def _forward(self,
+                 inputs: torch.Tensor,
+                 data_samples: Optional[Sequence[TextDetDataSample]] = None,
+                 **kwargs) -> torch.Tensor:
+        """Network forward process. Usually includes backbone, neck and head
+        forward without any post-processing.
+
+         Args:
+            inputs (Tensor): Inputs with shape (N, C, H, W).
+            data_samples (list[TextDetDataSample]): A list of N
+                datasamples, containing meta information and gold annotations
+                for each of the images.
+
+        Returns:
+            Tensor or tuple[Tensor]: A tuple of features from ``det_head``
+            forward.
+        """
+        x = self.extract_feat(inputs)
+        return self.det_head(x, data_samples)

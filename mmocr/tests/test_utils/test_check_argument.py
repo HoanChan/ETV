@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 
 import mmocr.utils as utils
@@ -18,12 +19,6 @@ def test_is_2dlist():
     assert utils.is_2dlist([])
     assert utils.is_2dlist([[]])
     assert utils.is_2dlist([[1]])
-
-
-def test_is_ndarray_list():
-    assert utils.is_ndarray_list([])
-    assert utils.is_ndarray_list([np.ndarray([1])])
-    assert not utils.is_ndarray_list([1])
 
 
 def test_is_type_list():
@@ -51,3 +46,9 @@ def test_valid_boundary():
     assert utils.valid_boundary(x, False)
     x = [0, 0, 1, 0, 1, 1, 0, 1, 1]
     assert utils.valid_boundary(x, True)
+
+
+def test_equal_len():
+
+    assert utils.equal_len([1, 2, 3], [1, 2, 3])
+    assert not utils.equal_len([1, 2, 3], [1, 2, 3, 4])

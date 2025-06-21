@@ -1,7 +1,5 @@
-from . import extractors, heads, losses
-
+# Copyright (c) OpenMMLab. All rights reserved.
 from .extractors import *  # NOQA
 from .heads import *  # NOQA
-from .losses import *  # NOQA
-
-__all__ = extractors.__all__ + heads.__all__ + losses.__all__
+from .module_losses import *  # NOQA
+from .postprocessors import *  # NOQA

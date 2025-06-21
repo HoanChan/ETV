@@ -1,17 +1,34 @@
+# Copyright (c) OpenMMLab. All rights reserved.
+from typing import Dict, Optional, Sequence, Union
+
+import torch
 import torch.nn as nn
-from mmcv.cnn import kaiming_init, uniform_init
+from mmengine.model import BaseModule
 
-from mmdet.models.builder import BACKBONES
+from mmocr.registry import MODELS
 
 
-@BACKBONES.register_module()
-class NRTRModalityTransform(nn.Module):
+@MODELS.register_module()
+class NRTRModalityTransform(BaseModule):
+    """Modality transform in NRTR.
 
-    def __init__(self, input_channels=3, input_height=32):
-        super().__init__()
+    Args:
+        in_channels (int): Input channel of image. Defaults to 3.
+        init_cfg (dict or list[dict], optional): Initialization configs.
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 3,
+        init_cfg: Optional[Union[Dict, Sequence[Dict]]] = [
+            dict(type='Kaiming', layer='Conv2d'),
+            dict(type='Uniform', layer='BatchNorm2d')
+        ]
+    ) -> None:
+        super().__init__(init_cfg=init_cfg)
 
         self.conv_1 = nn.Conv2d(
-            in_channels=input_channels,
+            in_channels=in_channels,
             out_channels=32,
             kernel_size=3,
             stride=2,
@@ -28,18 +45,17 @@ class NRTRModalityTransform(nn.Module):
         self.relu_2 = nn.ReLU(True)
         self.bn_2 = nn.BatchNorm2d(64)
 
-        feat_height = input_height // 4
+        self.linear = nn.Linear(512, 512)
 
-        self.linear = nn.Linear(64 * feat_height, 512)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Backbone forward.
 
-    def init_weights(self, pretrained=None):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                kaiming_init(m)
-            elif isinstance(m, nn.BatchNorm2d):
-                uniform_init(m)
-
-    def forward(self, x):
+        Args:
+            x (torch.Tensor): Image tensor of shape :math:`(N, C, W, H)`. W, H
+                is the width and height of image.
+        Return:
+            Tensor: Output tensor.
+        """
         x = self.conv_1(x)
         x = self.relu_1(x)
         x = self.bn_1(x)
@@ -49,7 +65,11 @@ class NRTRModalityTransform(nn.Module):
         x = self.bn_2(x)
 
         n, c, h, w = x.size()
+
         x = x.permute(0, 3, 2, 1).contiguous().view(n, w, h * c)
+
         x = self.linear(x)
+
         x = x.permute(0, 2, 1).contiguous().view(n, -1, 1, w)
+
         return x

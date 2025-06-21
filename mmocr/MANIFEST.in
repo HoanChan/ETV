@@ -1,3 +1,5 @@
-include mmocr/model_zoo.yml
-recursive-include mmocr/configs *.py *.yml
-recursive-include mmocr/tools *.sh *.py
+include requirements/*.txt
+include mmocr/.mim/model-index.yml
+include mmocr/.mim/dicts/*.txt
+recursive-include mmocr/.mim/configs *.py *.yml
+recursive-include mmocr/.mim/tools *.sh *.py
