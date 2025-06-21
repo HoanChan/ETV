@@ -45,7 +45,7 @@ conda env remove -n myenv
 5. **Tạo môi trường Conda mới:**
 
 ```bash
-conda create -n myenv python=3.8 -y
+conda create -n myenv python=3.11.0 -y
 ```
 6. **Kích hoạt môi trường Conda:**
 
@@ -53,100 +53,30 @@ conda create -n myenv python=3.8 -y
 conda activate myenv
 ```
 </details>
+
 <details>
 <summary>2. Cài đặt PyTorch và các thư viện cần thiết</summary>
-<details>
-<summary>Phiên bản cũ</summary>
-
-1. **Cài PyTorch hỗ trợ CUDA 11.1:**
-
-```bash
-pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
-# Install cudnn if necessary.
-conda install cudnn -c conda-forge
-
-```
-
-Sử dụng phiên bản 2.1.0 để phù hợp với mmcv 2.1.0 chứ không nó phải lên 2.2.0 mới phù hợp và như vậy thì lại không cài được mmDetection.
-xem https://pytorch.org/get-started/locally/ để biết thêm chi tiết.
-
-phiên bản torchvision phù hợp với pytorch 2.1.0 xem tại https://pypi.org/project/torchvision/
-
-2. **Kiểm tra cài đặt PyTorch:**
-
-```python
-import torch
-print(torch.__version__)
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0))
-print(torch.backends.cudnn.enabled)
-print(torch.backends.cudnn.version())
-
-```
-Nếu thấy phiên bản PyTorch và thông tin GPU, thì cài đặt đã thành công Pytorch và CUDA, nếu cài đặt cuDNN thì cũng sẽ có thông tin về cuDNN (tang cường hiệu suất cho các mô hình học sâu).
-
-3. **Cài đặt openMim để quản lý các mô hình và công cụ của MMDetection:**
-
-```bash
-pip install -U openmim
-```
-
-4. **Cài đặt mmEngine, một thư viện cơ sở cho các dự án của OpenMMLab:**
-
-```bash
-mim install mmengine
-```
-
-5. **Cài đặt mmCV (OpenMMLab Computer Vision Foundation):**
-
-```bash
-mim install mmcv==1.2.4
-```
-Khi cài mmDetection 2.11.0 thì nó yêu cầu mmcv-full>= 1.2.4, <1.4.0 nếu không là nó báo lỗi.
-
-6. **Cài đặt cpython để hỗ trợ biên dịch các gói Python:**
-
-```bash
-conda install -c conda-forge cython
-```
-
-7. Tạo thư mục dự án ETV (End to End Table Vision)
-
-```bash
-mkdir ~/ETV
-cd ~/ETV
-```
-8. Cài cpython để hỗ trợ biên dịch các gói Python:
-
-```bash
-pip install cython==0.29.33
-```
-dùng đúng phiên bản 0.29.33 để tương thích với mmcv 1.2.4 và mmDetection 2.11.0.
-
-9. Clone dự án `mmDetection 2.11.0` và dự án `mmOCR 0.2.0` về và cài đặt
-
-```bash
-git clone --branch v2.11.0 https://github.com/open-mmlab/mmdetection.git
-git clone --branch v0.2.0 https://github.com/open-mmlab/mmocr.git
-cd mmdetection
-pip install -v -e .
-cd ../mmocr
-pip install -v -e .
-```
-</details>
-<details>
-<summary>Phiên bản mới</summary>
 
 1. **Cài PyTorch hỗ trợ CUDA 11.8:**
 
 ```bash
-pip install torch==2.1.0+cu118 torchvision==0.16.0+cu118 -f https://download.pytorch.org/whl/torch_stable.html
+pip install "numpy<2"
+pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+# Install cudnn if necessary.
+conda install cudnn -c conda-forge
 ```
+Cần cài đặt numpy phiên bản <2 để tương thích với pytorch 2.0.1. Nếu không thì nó lại tự cài numpy mới nhất và không tương thích với pytorch 2.0.1.
 
-Sử dụng phiên bản 2.1.0 để phù hợp với mmcv 2.1.0 chứ không nó phải lên 2.2.0 mới phù hợp và như vậy thì lại không cài được mmDetection.
-xem https://pytorch.org/get-started/locally/ để biết thêm chi tiết.
+Xem chi tiết về các phiên bản PyTorch tại: https://pytorch.org/get-started/previous-versions/
 
-phiên bản torchvision phù hợp với pytorch 2.1.0 xem tại https://pypi.org/project/torchvision/
+Chọn Python 3.11.0, pyTorch 2.0.1 với CUDA 11.8, vì nó tương thích với mmEngine và mmCV.
+
+| MMEngine Version         | PyTorch Version    | Python Version      |
+|-------------------------|--------------------|---------------------|
+| main                    | >=1.6, <=2.1       | >=3.8, <=3.11       |
+| >=0.9.0, <=0.10.4       | >=1.6, <=2.1       | >=3.8, <=3.11       |
+
+Xem thêm tại: https://github.com/open-mmlab/mmengine?tab=readme-ov-file#installation
 
 2. **Kiểm tra cài đặt PyTorch:**
 
@@ -156,7 +86,7 @@ print(torch.__version__)
 print(torch.cuda.is_available())
 print(torch.cuda.get_device_name(0))
 ```
-Nếu bạn thấy phiên bản PyTorch và thông tin GPU, thì cài đặt đã thành công.
+Nếu thấy phiên bản PyTorch và thông tin GPU, thì cài đặt đã thành công.
 
 3. **Cài đặt cuDNN (NVIDIA CUDA Deep Neural Network library): (Option)**
 
@@ -202,7 +132,13 @@ cd ../mmocr
 pip install -v -e .
 ```
 
-</details>
+9. Xoá thư mục .github trong 2 dự án để khỏi bị lỗi khi sync repo ở nhiều máy khác nhau:
+
+```bash
+rm -rf mmdetection/.github
+rm -rf mmocr/.github
+```
+
 </details>
 <details>
 <summary>3. Chuẩn bị dataset</summary>
@@ -229,23 +165,6 @@ Sau đó giải nén bằng cách chạy lệnh:
 
 ```bash
 unzip vitabset.zip
-```
-
-## Tải Dataset ViTabNet đã Preprecessing
-
-Chạy lệnh sau để tải dataset ViTabNet (đã preprocess) về:
-```bash
-curl -L -o vitabset_preprocess.zip 'https://docs.google.com/uc?export=download&id=1o_fCCeYqv3_j2ccbP4oEpC4kVZr480PS'
-```
-hoặc
-```bash
-wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1o_fCCeYqv3_j2ccbP4oEpC4kVZr480PS' -O vitabset_preprocess.zip
-```
-
-Sau đó giải nén bằng cách chạy lệnh:
-
-```bash
-unzip vitabset_preprocess.zip -d /preprocess/
 ```
 
 </details>
