@@ -6,5 +6,5 @@ torchaudio==2.0.2+cu118
 openmim==0.3.9
 mmengine==0.10.7
 mmcv==2.0.1
-# mmdet==3.1.0        .\mmdetection
-# mmocr==1.0.1        .\mmocr
+mmdet==3.1.0
+mmocr==1.0.1
