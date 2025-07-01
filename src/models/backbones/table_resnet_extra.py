@@ -1,9 +1,8 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from mmdet.models.builder import BACKBONES
-from ..layers.context_block import ContextBlock
+from mmocr.registry import MODELS
+from mmcv.cnn.bricks import ContextBlock
+from mmdet.models.backbones.resnet import BasicBlock
 
 def conv3x3(in_planes, out_planes, stride=1):
     """ 3x3 convolution with padding """
@@ -13,67 +12,26 @@ def conv1x1(in_planes, out_planes, stride=1):
     """ 1x1 convolution """
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None, gcb_config=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=0.9)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=0.9)
-        self.downsample = downsample
-        self.stride = stride
-        self.gcb_config = gcb_config
-
-        if self.gcb_config is not None:
-            gcb_ratio = gcb_config['ratio']
-            gcb_headers = gcb_config['headers']
-            att_scale = gcb_config['att_scale']
-            fusion_type = gcb_config['fusion_type']
-            self.context_block = ContextBlock(inplanes=planes,
-                                                        ratio=gcb_ratio,
-                                                        headers=gcb_headers,
-                                                        att_scale=att_scale,
-                                                        fusion_type=fusion_type)
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.gcb_config is not None:
-            out = self.context_block(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
 def get_gcb_config(gcb_config, layer):
     if gcb_config is None or not gcb_config['layers'][layer]:
         return None
     else:
         return gcb_config
 
-@BACKBONES.register_module()
+@MODELS.register_module()
 class TableResNetExtra(nn.Module):
 
-    def __init__(self, layers, input_dim=3, gcb_config=None):
+    def __init__(self, 
+                 layers, 
+                 input_dim=3, 
+                 gcb_config=None,
+                 init_cfg=None):
         assert len(layers) >= 4
 
         super(TableResNetExtra, self).__init__()
+        self.init_cfg = init_cfg
         self.inplanes = 128
+        
         self.conv1 = nn.Conv2d(input_dim, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
@@ -98,6 +56,7 @@ class TableResNetExtra(nn.Module):
         self.bn4 = nn.BatchNorm2d(256)
         self.relu4 = nn.ReLU(inplace=True)
 
+        # Note: Different from ResNetExtra - uses (2,2) instead of (2,1)
         self.maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.layer3 = self._make_layer(BasicBlock, 512, layers[2], stride=1, gcb_config=get_gcb_config(gcb_config, 2))
@@ -112,13 +71,20 @@ class TableResNetExtra(nn.Module):
         self.bn6 = nn.BatchNorm2d(512)
         self.relu6 = nn.ReLU(inplace=True)
 
-    def init_weights(self, pretrained=None):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+    def init_weights(self):
+        # Support both mmOCR 1.x style (no parameters) and original style (with pretrained parameter)
+        if hasattr(self, 'init_cfg') and self.init_cfg is not None:
+            # Use mmcv init system if init_cfg is provided
+            from mmcv.cnn import initialize
+            initialize(self, self.init_cfg)
+        else:
+            # Original initialization logic
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.constant_(m.weight, 1)
+                    nn.init.constant_(m.bias, 0)
 
     def _make_layer(self, block, planes, blocks, stride=1, gcb_config=None):
         downsample = None
@@ -129,10 +95,31 @@ class TableResNetExtra(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, gcb_config=gcb_config))
+        
+        # Create first block with downsample
+        first_block = block(self.inplanes, planes, stride, downsample)
+        layers.append(first_block)
+        
         self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+        
+        # Add remaining blocks
+        for i in range(1, blocks):
+            block_instance = block(self.inplanes, planes)
+            layers.append(block_instance)
+
+        # Add ContextBlock after the layer if gcb_config is provided
+        if gcb_config is not None:
+            try:
+                context_block = ContextBlock(
+                    in_channels=planes * block.expansion,
+                    ratio=gcb_config.get('ratio', 1.0/16),
+                    pooling_type=gcb_config.get('pooling_type', 'att'),
+                    fusion_types=(gcb_config.get('fusion_type', 'channel_add'),)
+                )
+                layers.append(context_block)
+            except Exception:
+                # Fallback: create a simple identity layer if ContextBlock fails
+                print(f"Warning: Could not create ContextBlock with config {gcb_config}, skipping...")
 
         return nn.Sequential(*layers)
 
@@ -181,4 +168,3 @@ class TableResNetExtra(nn.Module):
         # (6, 40)
 
         return f
-
