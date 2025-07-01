@@ -1,8 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from typing import Dict, Optional, Sequence
 from mmengine.evaluator import BaseMetric
-import re
-import copy
 
 from .TEDS.TEDS import TEDS
 from .post_processing import ( insert_text_to_token, text_to_list, htmlPostProcess, deal_bb )
