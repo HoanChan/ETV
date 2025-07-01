@@ -1,12 +1,15 @@
-import sys
-import os
-
-# Thêm đường dẫn tới thư mục chứa mmocr vào sys.path
-mmocr_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../mmocr'))
-if mmocr_path not in sys.path:
-    sys.path.append(mmocr_path)
-
 from mmocr.apis import MMOCRInferencer
 
+# Tạo một demo OCR với hình ảnh từ internet hoặc hình ảnh local
 ocr = MMOCRInferencer(det='DBNet', rec='CRNN')
-ocr(os.path.join(mmocr_path, 'demo/demo_text_ocr.jpg'), show=True, print_result=True)
+
+# Sử dụng URL hình ảnh demo từ internet hoặc có thể sử dụng hình ảnh local nếu có
+demo_img = 'https://raw.githubusercontent.com/open-mmlab/mmocr/main/demo/demo_text_ocr.jpg'
+
+try:
+    # Thử với URL hình ảnh demo
+    ocr(demo_img, show=True, print_result=True)
+    print("OCR completed successfully!")
+except Exception as e:
+    print(f"Error occurred: {e}")
+    print("Please make sure you have internet connection or provide a local image path.")
