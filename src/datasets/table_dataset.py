@@ -1,7 +1,7 @@
 import os
 import bz2
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from mmengine.dataset import BaseDataset
 from mmengine.fileio import get_local_path
 
@@ -25,8 +25,8 @@ except ImportError:
 class PubTabNetDataset(BaseDataset):
     """PubTabNet Dataset for table structure and content recognition.
     
-    This dataset supports both table structure recognition and cell content recognition
-    tasks for table understanding.
+    This dataset follows mmOCR 1.x data format standards.
+    Each sample returns a dict with 'instances' key containing task-specific data.
 
     The annotation format for PubTabNet:
     {
@@ -64,13 +64,12 @@ class PubTabNetDataset(BaseDataset):
             Defaults to 150.
         ignore_empty_cells (bool): Whether to ignore empty cells in training.
             Defaults to True.
-        normalize_bbox (bool): Whether to normalize bbox coordinates to [0, 1].
-            Defaults to True.
         **kwargs: Other arguments passed to BaseDataset.
     """
 
     METAINFO = dict(
         dataset_name='PubTabNet',
+        task_name='table_recognition',
         paper_info=dict(
             title='PubTabNet: A Large-scale Dataset for Table Recognition',
             authors='Zheng et al.',
@@ -84,7 +83,6 @@ class PubTabNetDataset(BaseDataset):
                  max_seq_len: int = 500,
                  max_cell_len: int = 150,
                  ignore_empty_cells: bool = True,
-                 normalize_bbox: bool = True,
                  **kwargs):
         
         assert task_type in ['structure', 'content', 'both'], \
@@ -99,7 +97,6 @@ class PubTabNetDataset(BaseDataset):
         self.max_seq_len = max_seq_len
         self.max_cell_len = max_cell_len
         self.ignore_empty_cells = ignore_empty_cells
-        self.normalize_bbox = normalize_bbox
         
         super().__init__(**kwargs)
 
@@ -138,74 +135,77 @@ class PubTabNetDataset(BaseDataset):
         return data_list
 
     def parse_data_info(self, raw_data_info: Dict) -> Optional[Dict]:
-        """Parse raw data info to the format needed by the model."""
+        """Parse raw data info to mmOCR format with 'instances' key."""
         try:
             data_info = {}
             
-            # Basic image information
-            data_info['img_path'] = os.path.join(self.data_prefix.get('img_path', ''), 
-                                               raw_data_info['filename'])
+            # Basic image information (required by mmOCR)
+            data_info['img_path'] = os.path.join(
+                self.data_prefix.get('img_path', ''), 
+                raw_data_info['filename']
+            )
             
-            # Image size will be determined later in the pipeline
-            data_info['height'] = None
-            data_info['width'] = None
-            data_info['img_id'] = raw_data_info.get('imgid', 0)
-            data_info['split'] = raw_data_info.get('split', 'train')
+            # Add sample_idx for compatibility
+            data_info['sample_idx'] = raw_data_info.get('imgid', 0)
             
             # Parse HTML structure and content
             html_data = raw_data_info.get('html', {})
             
-            # Structure tokens
-            structure_data = html_data.get('structure', {})
-            structure_tokens = structure_data.get('tokens', [])
+            # Create instances list (mmOCR 1.x format)
+            instances = []
             
             if self.task_type in ['structure', 'both']:
-                data_info['structure_text'] = ' '.join(structure_tokens[:self.max_seq_len])
-                data_info['structure_tokens'] = structure_tokens[:self.max_seq_len]
-            
-            # Cell data - PubTabNet uses 'cell' key
-            cells_data = html_data.get('cell', [])
+                # Structure recognition instance
+                structure_data = html_data.get('structure', {})
+                structure_tokens = structure_data.get('tokens', [])
+                structure_text = ' '.join(structure_tokens[:self.max_seq_len])
+                
+                structure_instance = {
+                    'text': structure_text,
+                    'task_type': 'structure'
+                }
+                instances.append(structure_instance)
             
             if self.task_type in ['content', 'both']:
-                cell_contents = []
-                cell_bboxes = []
-                cell_masks = []  # Mask for valid cells (non-empty)
+                # Cell content recognition instances
+                cells_data = html_data.get('cell', [])
                 
-                for cell in cells_data:
+                for idx, cell in enumerate(cells_data):
                     cell_tokens = cell.get('tokens', [])
                     cell_bbox = cell.get('bbox', [])
                     
-                    # Cell content
-                    if cell_tokens:
-                        cell_content = ' '.join(cell_tokens[:self.max_cell_len])
-                        cell_contents.append(cell_content)
-                        cell_masks.append(1)
-                    else:
-                        if not self.ignore_empty_cells:
-                            cell_contents.append('')
-                            cell_masks.append(0)
-                        else:
-                            continue
+                    # Skip empty cells if configured
+                    if not cell_tokens and self.ignore_empty_cells:
+                        continue
                     
-                    # Cell bbox
+                    cell_text = ' '.join(cell_tokens[:self.max_cell_len]) if cell_tokens else ''
+                    
+                    cell_instance = {
+                        'text': cell_text,
+                        'task_type': 'content',
+                        'cell_id': idx
+                    }
+                    
+                    # Add bbox if available
                     if len(cell_bbox) == 4:
-                        bbox = cell_bbox.copy()
-                        # Note: bbox normalization will be handled in the pipeline
-                        # when actual image size is available
-                        cell_bboxes.append(bbox)
-                    else:
-                        cell_bboxes.append([0.0, 0.0, 0.0, 0.0])
-                
-                data_info['cell_content'] = cell_contents
-                data_info['cell_bbox'] = cell_bboxes
-                data_info['cell_masks'] = cell_masks
-                data_info['num_cells'] = len(cell_contents)
+                        cell_instance['bbox'] = cell_bbox
+                    
+                    instances.append(cell_instance)
+            
+            # Store instances in the required format
+            data_info['instances'] = instances
+            
+            # Add metadata
+            data_info['img_info'] = {
+                'height': None,  # Will be set by pipeline
+                'width': None,   # Will be set by pipeline
+                'split': raw_data_info.get('split', 'train')
+            }
             
             return data_info
             
         except Exception as e:
-            print(f"Error parsing data info: {e}")
-            print(f"Raw data: {raw_data_info}")
+            print(f"Error parsing data info for {raw_data_info.get('filename', 'unknown')}: {e}")
             return None
 
     def get_data_info(self, idx: int) -> Dict:
