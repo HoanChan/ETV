@@ -5,7 +5,7 @@ import re
 import copy
 
 from .TEDS.TEDS import TEDS
-from .post_processing import ( insert_text_to_token, text_to_list, htmlPostProcess, deal_bb )
+from .post_processing import (insert_text_to_token, text_to_list, htmlPostProcess, deal_bb)
 
 try:
     from mmocr.registry import METRICS
@@ -16,17 +16,16 @@ except ImportError:
 
 
 @METRICS.register_module()
-class TEDSMetric(BaseMetric):
-    """TEDS (Tree Edit Distance based Similarity) metric for table structure recognition task.
+class BatchTEDSMetric(BaseMetric):
+    """Batch TEDS metric for table structure recognition task.
     
-    This metric evaluates the similarity between predicted and ground truth table structures
-    using Tree Edit Distance algorithm. It includes comprehensive post-processing to handle
-    various prediction formats and edge cases.
+    This version processes all samples at once using batch evaluation,
+    which can be more efficient for large datasets.
 
     Args:
         structure_only (bool): Whether to evaluate only table structure, ignoring cell content.
             Defaults to False.
-        n_jobs (int): Number of parallel jobs for evaluation. Defaults to 1.
+        n_jobs (int): Number of parallel jobs for evaluation. Defaults to 4.
         ignore_nodes (list[str], optional): List of HTML tag names to ignore during evaluation.
             Defaults to None.
         collect_device (str): Device name used for collecting results from
@@ -42,7 +41,7 @@ class TEDSMetric(BaseMetric):
 
     def __init__(self,
                  structure_only: bool = False,
-                 n_jobs: int = 1,
+                 n_jobs: int = 4,
                  ignore_nodes: Optional[list] = None,
                  collect_device: str = 'cpu',
                  prefix: Optional[str] = None) -> None:
@@ -57,19 +56,24 @@ class TEDSMetric(BaseMetric):
             n_jobs=n_jobs,
             ignore_nodes=ignore_nodes
         )
+        
+        # Store samples for batch processing
+        self.pred_samples = {}
+        self.gt_samples = {}
 
     def process(self, data_batch: Sequence[Dict],
                 data_samples: Sequence[Dict]) -> None:
-        """Process one batch of data_samples. The processed results should be
-        stored in ``self.results``, which will be used to compute the metrics
-        when all batches have been processed.
+        """Process one batch of data_samples. Store samples for batch evaluation.
 
         Args:
             data_batch (Sequence[Dict]): A batch of gts.
             data_samples (Sequence[Dict]): A batch of outputs from the model.
         """
-        for data_sample in data_samples:
-            # Extract predicted HTML with post-processing
+        for idx, data_sample in enumerate(data_samples):
+            # Generate unique sample ID
+            sample_id = f"sample_{len(self.pred_samples)}"
+            
+            # Extract predicted HTML with same post-processing as TEDSMetric
             pred_html = ""
             
             # Priority 1: Handle raw tokens + cells format (TableMASTER format)
@@ -139,14 +143,9 @@ class TEDSMetric(BaseMetric):
             if gt_html and not gt_html.startswith('<html>'):
                 gt_html = self._html_post_process(gt_html)
             
-            # Calculate TEDS score for this sample
-            if pred_html and gt_html:
-                teds_score = self.teds_evaluator.evaluate(pred_html, gt_html)
-            else:
-                teds_score = 0.0
-            
-            result = dict(teds_score=teds_score)
-            self.results.append(result)
+            # Store samples
+            self.pred_samples[sample_id] = pred_html
+            self.gt_samples[sample_id] = {'html': gt_html}
 
     def _process_tokens_to_html(self, pred_text: str, pred_cells: list) -> str:
         """Process tokens and cells to HTML using mmocr_teds compatible method.
@@ -185,7 +184,7 @@ class TEDSMetric(BaseMetric):
         return htmlPostProcess(html)
 
     def compute_metrics(self, results: Sequence[Dict]) -> Dict:
-        """Compute the metrics from processed results.
+        """Compute the metrics using batch evaluation.
 
         Args:
             results (list[Dict]): The processed results of each batch.
@@ -194,21 +193,25 @@ class TEDSMetric(BaseMetric):
             Dict: The computed metrics. The keys are the names of the metrics,
             and the values are corresponding results.
         """
-        if not results:
+        if not self.pred_samples or not self.gt_samples:
             return {'teds': 0.0}
         
-        # Calculate average TEDS score
-        teds_scores = [result['teds_score'] for result in results]
+        # Perform batch evaluation
+        scores = self.teds_evaluator.batch_evaluate(self.pred_samples, self.gt_samples)
+        
+        # Calculate statistics
+        teds_scores = list(scores.values())
         avg_teds = sum(teds_scores) / len(teds_scores)
-        
-        eval_res = {}
-        eval_res['teds'] = float(f'{avg_teds:.4f}')
-        
-        # Additional statistics
         max_teds = max(teds_scores)
         min_teds = min(teds_scores)
         
+        eval_res = {}
+        eval_res['teds'] = float(f'{avg_teds:.4f}')
         eval_res['teds_max'] = float(f'{max_teds:.4f}')
         eval_res['teds_min'] = float(f'{min_teds:.4f}')
+        
+        # Clear stored samples for next evaluation
+        self.pred_samples.clear()
+        self.gt_samples.clear()
         
         return eval_res
