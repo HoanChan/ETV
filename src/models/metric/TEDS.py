@@ -9,6 +9,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # Apache 2.0 License for more details.
 
+import os
 import distance
 from apted import APTED, Config
 from apted.helpers import Tree
@@ -152,9 +153,10 @@ class TEDS(object):
 if __name__ == '__main__':
     import json
     import pprint
-    with open('sample_pred.json') as fp:
+    path = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(path, 'sample_pred.json')) as fp:
         pred_json = json.load(fp)
-    with open('sample_gt.json') as fp:
+    with open(os.path.join(path, 'sample_gt.json')) as fp:
         true_json = json.load(fp)
     teds = TEDS(n_jobs=4)
     scores = teds.batch_evaluate(pred_json, true_json)
