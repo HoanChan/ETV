@@ -67,11 +67,23 @@ def deal_duplicate_bb(thead_part):
     for td_item in td_list:
         if td_item.count('<b>') > 1 or td_item.count('</b>') > 1:
             # multiply <b></b> in <td></td> case.
-            # 1. remove all <b></b>
-            td_item = td_item.replace('<b>','').replace('</b>','')
-            # 2. replace <tb> -> <tb><b>, </tb> -> </b></tb>.
-            td_item = td_item.replace('<td>', '<td><b>').replace('</td>', '</b></td>')
-            new_td_list.append(td_item)
+            # 1. Extract the attributes and content separately
+            if '>' in td_item and '</td>' in td_item:
+                td_start = td_item.split('>', 1)[0] + '>'  # e.g., '<td rowspan="2">'
+                td_end = '</td>'
+                content = td_item.split('>', 1)[1].replace('</td>', '')  # extract content
+                
+                # 2. Remove all <b> and </b> tags from content
+                clean_content = content.replace('<b>', '').replace('</b>', '')
+                
+                # 3. Wrap the clean content with single <b></b>
+                new_td_item = td_start + '<b>' + clean_content + '</b>' + td_end
+                new_td_list.append(new_td_item)
+            else:
+                # Fallback to original logic if parsing fails
+                td_item = td_item.replace('<b>','').replace('</b>','')
+                td_item = td_item.replace('<td>', '<td><b>').replace('</td>', '</b></td>')
+                new_td_list.append(td_item)
         else:
             new_td_list.append(td_item)
 
@@ -171,6 +183,10 @@ def merge_span_token(master_token_list):
     :param master_token_list:
     :return:
     """
+    # Handle empty list gracefully
+    if not master_token_list:
+        return ['</tbody>']
+    
     new_master_token_list = []
     pointer = 0
     if master_token_list[-1] != '</tbody>':
@@ -262,16 +278,62 @@ def insert_text_to_token(master_token_list, cell_content_list):
     master_token_list = merge_span_token(master_token_list)
     merged_result_list = []
     text_count = 0
-    for master_token in master_token_list:
+    i = 0
+    
+    while i < len(master_token_list):
+        master_token = master_token_list[i]
+        
         if master_token.startswith('<td'):
-            if text_count > len(cell_content_list)-1:
+            if text_count < len(cell_content_list):
+                # We have content available for this token
+                cell_content = cell_content_list[text_count]
+                
+                if '><' in master_token:
+                    # Case: <td></td> or <td rowspan="2"></td> - self-contained
+                    master_token = master_token.replace('><', '>{}<'.format(cell_content))
+                    master_token = deal_eb_token(master_token)
+                    merged_result_list.append(master_token)
+                elif master_token.endswith('>'):
+                    # Case: <td> or <td rowspan="2"> - needs separate closing tag
+                    # Insert content and look for closing </td>
+                    master_token = master_token[:-1] + '>{}'.format(cell_content)
+                    master_token = deal_eb_token(master_token)
+                    merged_result_list.append(master_token)
+                    
+                    # Find and include the corresponding </td>
+                    if i + 1 < len(master_token_list) and master_token_list[i + 1] == '</td>':
+                        merged_result_list.append('</td>')
+                        i += 1  # Skip the </td> as we've processed it
+                else:
+                    # Case: incomplete <td (shouldn't happen after merge_span_token)
+                    master_token = master_token + '>{}'.format(cell_content)
+                    master_token = deal_eb_token(master_token)
+                    merged_result_list.append(master_token)
+                
                 text_count += 1
-                continue
             else:
-                master_token = master_token.replace('><', '>{}<'.format(cell_content_list[text_count]))
-                text_count += 1
-        master_token = deal_eb_token(master_token)
-        merged_result_list.append(master_token)
+                # No more content available, skip this token and its closing tag entirely
+                if '><' in master_token:
+                    # Self-contained token, just skip it
+                    pass
+                elif master_token.endswith('>'):
+                    # Skip this opening tag and its corresponding closing tag
+                    if i + 1 < len(master_token_list) and master_token_list[i + 1] == '</td>':
+                        i += 1  # Skip the </td> as well
+                # For incomplete tokens, just skip
+        else:
+            # Non-td token, process normally unless it's a </td> that we should skip
+            if master_token == '</td>':
+                # This might be an orphaned </td> from a skipped <td>, check if we should skip it
+                # If the previous token was skipped, this should also be skipped
+                # But this logic is complex, let's just include it for now and handle in the skip logic above
+                pass
+            else:
+                # Process non-td tokens (like </tbody>, <tr>, etc.)
+                master_token = deal_eb_token(master_token)
+                merged_result_list.append(master_token)
+        
+        i += 1
 
     return ''.join(merged_result_list)
 
@@ -280,32 +342,17 @@ def text_to_list(master_token):
     # insert virtual master token
     master_token_list = master_token.split(',')
 
-    if master_token_list[-1] == '<td></td>':
-        master_token_list.append('</tr>')
-        master_token_list.append('</tbody>')
-    elif master_token_list[-1] != '</tbody>':
-        master_token_list.append('</tbody>')
+    # if master_token_list[-1] == '<td></td>':
+    #     master_token_list.append('</tr>')
+    #     master_token_list.append('</tbody>')
+    # elif master_token_list[-1] != '</tbody>':
+    #     master_token_list.append('</tbody>')
 
-    if master_token_list[-2] != '</tr>':
-        master_token_list.insert(-1, '</tr>')
+    # if master_token_list[-2] != '</tr>':
+    #     master_token_list.insert(-1, '</tr>')
 
     return master_token_list
 
 def htmlPostProcess(text):
     text = '<html><body><table>' + text + '</table></body></html>'
     return text
-
-
-def singleEvaluation(teds, file_name, context, gt_context):
-    # save problem log
-    # save_folder = ''
-
-    # html format process
-    htmlContext = htmlPostProcess(context)
-    htmlGtContext = htmlPostProcess(gt_context)
-    # Evaluate
-    score = teds.evaluate(htmlContext, htmlGtContext)
-
-    print("FILENAME : {}".format(file_name))
-    print("SCORE    : {}".format(score))
-    return score
