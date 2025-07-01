@@ -1,6 +1,4 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 from typing import Callable, List, Optional, Sequence, Tuple, Union
-import json
 from mmocr.datasets import RecogLMDBDataset
 from mmocr.registry import DATASETS
 
