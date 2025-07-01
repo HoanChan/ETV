@@ -1,11 +1,8 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import re
-from typing import Dict, Optional, Sequence, Union
-
-import mmengine
+from typing import Dict, Optional, Sequence
 from mmengine.evaluator import BaseMetric
 
-from .TEDS import TEDS
+from .TEDS.TEDS import TEDS
 
 try:
     from mmocr.registry import METRICS
