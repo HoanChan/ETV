@@ -216,3 +216,74 @@ class TestMasterPostprocessor:
         assert isinstance(str_score, list)
         assert all(isinstance(idx, int) for idx in str_index)
         assert all(isinstance(score, float) for score in str_score)
+
+
+    def test_master_empty_tensor(self, postprocessor):
+        """Test MasterPostprocessor with empty tensor."""
+        # Empty 2D tensor
+        probs = torch.empty(0, 10)
+        char_indexes, char_scores = postprocessor.get_single_prediction(probs)
+        assert char_indexes == []
+        assert char_scores == []
+
+    def test_master_single_timestep(self, postprocessor):
+        """Test MasterPostprocessor with single timestep."""
+        probs = torch.full((1, 10), -10.0)
+        probs[0, 4] = 10.0  # 'a'
+        
+        char_indexes, char_scores = postprocessor.get_single_prediction(probs)
+        assert char_indexes == [4]
+        assert len(char_scores) == 1
+
+    def test_master_only_ignored_tokens(self, postprocessor):
+        """Test MasterPostprocessor with only ignored tokens."""
+        probs = torch.full((3, 10), -10.0)
+        probs[0, 0] = 10.0  # start
+        probs[1, 2] = 10.0  # padding
+        probs[2, 3] = 10.0  # unknown
+        
+        char_indexes, char_scores = postprocessor.get_single_prediction(probs)
+        assert char_indexes == []
+        assert char_scores == []
+
+    def test_master_immediate_end_token(self, postprocessor):
+        """Test MasterPostprocessor with immediate end token."""
+        probs = torch.full((2, 10), -10.0)
+        probs[0, 1] = 10.0  # end token at start
+        probs[1, 4] = 10.0  # 'a' - should be ignored
+        
+        char_indexes, char_scores = postprocessor.get_single_prediction(probs)
+        assert char_indexes == []
+        assert char_scores == []
+
+    def test_master_wrong_dimension_tensor(self, postprocessor):
+        """Test MasterPostprocessor with wrong tensor dimensions."""
+        # 1D tensor - should now handle gracefully after fix
+        probs_1d = torch.full((10,), 0.1)  
+        # After fix, this should work by treating as single timestep
+        char_indexes, char_scores = postprocessor.get_single_prediction(probs_1d)
+        # Should return valid result (though might be empty due to ignore indexes)
+        assert isinstance(char_indexes, list)
+        assert isinstance(char_scores, list)
+        
+        # 4D tensor - should handle by raising clear error
+        probs_4d = torch.full((1, 1, 3, 10), -10.0)
+        with pytest.raises(ValueError, match="Expected 2D or 3D tensor"):
+            postprocessor.get_single_prediction(probs_4d)
+
+    def test_master_nan_inf_values(self, postprocessor):
+        """Test MasterPostprocessor with NaN and Inf values."""
+        probs = torch.full((3, 10), 0.0)
+        probs[0, 4] = float('inf')  # Inf value
+        probs[1, 5] = float('nan')  # NaN value
+        probs[2, 6] = 1.0  # Normal value
+        
+        # Should handle NaN/Inf gracefully or raise appropriate error
+        try:
+            char_indexes, char_scores = postprocessor.get_single_prediction(probs)
+            # Check if scores contain NaN/Inf
+            assert all(not np.isnan(score) for score in char_scores)
+            assert all(not np.isinf(score) for score in char_scores)
+        except (ValueError, RuntimeError):
+            # Also acceptable to raise error for invalid inputs
+            pass

@@ -52,13 +52,26 @@ class MasterPostprocessor(BaseTextRecogPostprocessor):
         """Convert tensor to indices and scores."""
         if outputs.dim() == 3:
             outputs = outputs.squeeze(0)
+        elif outputs.dim() == 1:
+            # Handle 1D tensor case - treat as single timestep
+            outputs = outputs.unsqueeze(0)
+        elif outputs.dim() != 2:
+            raise ValueError(f"Expected 2D or 3D tensor, got {outputs.dim()}D tensor")
             
         seq = outputs.softmax(-1)
         max_value, max_idx = torch.max(seq, -1)
         
         str_index, str_score = [], []
-        output_index = max_idx.cpu().detach().numpy().tolist()
-        output_score = max_value.cpu().detach().numpy().tolist()
+        output_index = max_idx.cpu().detach().numpy()
+        output_score = max_value.cpu().detach().numpy()
+        
+        # Ensure arrays are 1D for iteration
+        if output_index.ndim == 0:
+            output_index = output_index.reshape(1)
+            output_score = output_score.reshape(1)
+        
+        output_index = output_index.tolist()
+        output_score = output_score.tolist()
         
         for char_index, char_score in zip(output_index, output_score):
             if char_index in self.ignore_indexes:

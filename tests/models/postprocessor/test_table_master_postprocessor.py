@@ -257,8 +257,8 @@ class TestTableMasterPostprocessor:
         assert len(masks) == 2  # Two strings
         # Check that <td></td> and <td tokens get mask value 1
         # Other tokens should get mask value 0
-        assert masks[0].tolist() == [0, 1, 0]  # Only <td></td> should be 1
-        assert masks[1].tolist() == [0, 1, 0]  # <td should be 1
+        assert masks[0] == [0, 1, 0]  # Only <td></td> should be 1
+        assert masks[1] == [0, 1, 0]  # <td should be 1
 
     def test_filter_invalid_bbox(self, postprocessor):
         """Test _filter_invalid_bbox method."""
@@ -297,10 +297,10 @@ class TestTableMasterPostprocessor:
             [[0.3, 0.3, 0.7, 0.7], [0.4, 0.4, 0.8, 0.8]]
         ])
         
-        pred_bbox_masks = np.array([
+        pred_bbox_masks = [
             [1, 1],  # Both bboxes valid for first sample
             [1, 0]   # Only first bbox valid for second sample
-        ])
+        ]
         
         # Create mock data samples
         data_samples = []
@@ -447,3 +447,239 @@ class TestTableMasterPostprocessor:
         finally:
             # Restore the attribute
             postprocessor.cell_dictionary.end_idx = original_end_idx
+
+
+    @pytest.fixture
+    def table_mock_dictionary(self):
+        """Create mock table dictionary."""
+        dictionary = Mock()
+        dictionary.num_classes = 20
+        dictionary.start_idx = 0
+        dictionary.end_idx = 1
+        dictionary.padding_idx = 2
+        dictionary.unknown_idx = 3
+        dictionary.dict = [
+            '<BOS>', '<EOS>', '<PAD>', '<UKN>', 
+            '<table>', '</table>', '<tr>', '</tr>', 
+            '<td>', '</td>', '<td></td>', '<th>', '</th>', '<th></th>',
+            'text1', 'text2', 'text3', 'text4', 'text5', 'text6'
+        ]
+        
+        def idx2str(indexes_list):
+            if isinstance(indexes_list, list) and len(indexes_list) > 0:
+                if isinstance(indexes_list[0], int):
+                    indexes_list = [indexes_list]
+            results = []
+            for indexes in indexes_list:
+                string_parts = []
+                for idx in indexes:
+                    if 0 <= idx < len(dictionary.dict):
+                        string_parts.append(dictionary.dict[idx])
+                results.append(','.join(string_parts))
+            return results
+        
+        dictionary.idx2str = idx2str
+        return dictionary
+
+    @pytest.fixture
+    def table_postprocessor(self, table_mock_dictionary, mock_dictionary):
+        """Create TableMasterPostprocessor for testing."""
+        with patch('models.postprocessors.table_master_postprocessor.BaseTextRecogPostprocessor.__init__'), \
+             patch('models.postprocessors.table_master_postprocessor.MODELS.build', return_value=mock_dictionary):
+            
+            processor = TableMasterPostprocessor(
+                dictionary={'type': 'BaseDictionary'},
+                cell_dictionary={'type': 'BaseDictionary'},
+                max_seq_len=500,
+                max_seq_len_cell=100,
+                start_end_same=False
+            )
+            
+            processor.dictionary = table_mock_dictionary
+            processor.cell_dictionary = mock_dictionary
+            processor.ignore_indexes = [0, 2, 3]
+            return processor
+
+
+    def test_table_invalid_bbox_filter_edge_cases(self, table_postprocessor):
+        """Test edge cases in bbox filtering."""
+        # Test with bboxes having exactly boundary values
+        output_bbox = np.array([
+            [0.0, 0.0, 1.0, 1.0],   # Boundary values - should be valid
+            [0.5, 0.5, 0.5, 0.5],   # Zero area bbox - might be problematic
+            [-1e-10, 0.0, 1.0, 1.0], # Very slightly negative - should be invalid
+            [0.0, 0.0, 1.0000001, 1.0] # Very slightly > 1.0 - should be invalid
+        ])
+        
+        pred_bbox_mask = np.array([1, 1, 1, 1])
+        
+        filtered_bbox = table_postprocessor._filter_invalid_bbox(output_bbox, pred_bbox_mask)
+        
+        # First bbox should be kept (boundary values are valid)
+        np.testing.assert_array_almost_equal(filtered_bbox[0], [0.0, 0.0, 1.0, 1.0])
+        
+        # Second bbox (zero area) - behavior depends on implementation
+        # Third and fourth should be zeroed (invalid coordinates)
+        np.testing.assert_array_almost_equal(filtered_bbox[2], [0.0, 0.0, 0.0, 0.0])
+        np.testing.assert_array_almost_equal(filtered_bbox[3], [0.0, 0.0, 0.0, 0.0])
+
+    def test_table_mismatched_cell_outputs_length(self, table_postprocessor):
+        """Test handling of mismatched cell_outputs length."""
+        # Create structure for 2 samples but only 1 cell output
+        structure_outputs = torch.full((2, 3, 20), -10.0)
+        structure_outputs[0, 0, 4] = 10.0  # '<table>'
+        structure_outputs[0, 1, 8] = 10.0  # '<td>'
+        structure_outputs[0, 2, 1] = 10.0  # '<EOS>'
+        
+        structure_outputs[1, 0, 6] = 10.0  # '<tr>'
+        structure_outputs[1, 1, 9] = 10.0  # '</td>'
+        structure_outputs[1, 2, 1] = 10.0  # '<EOS>'
+        
+        bbox_outputs = torch.zeros((2, 3, 4))
+        cell_outputs = [torch.full((1, 3, 10), -10.0)]  # Only 1 output for 2 samples!
+        
+        data_samples = []
+        for i in range(2):
+            data_sample = TextRecogDataSample()
+            data_sample.set_metainfo({
+                'scale_factor': [1.0, 1.0],
+                'pad_shape': [100, 100],
+                'img_shape': [100, 100]
+            })
+            data_samples.append(data_sample)
+        
+        # This should either handle gracefully or raise a clear error
+        with pytest.raises((IndexError, ValueError)):
+            table_postprocessor.format_table_outputs(
+                structure_outputs, bbox_outputs, cell_outputs, data_samples
+            )
+
+    def test_table_missing_metadata_in_data_sample(self, table_postprocessor):
+        """Test handling of missing metadata in data samples."""
+        structure_outputs = torch.full((1, 2, 20), -10.0)
+        structure_outputs[0, 0, 4] = 10.0  # '<table>'
+        structure_outputs[0, 1, 1] = 10.0  # '<EOS>'
+        
+        bbox_outputs = torch.zeros((1, 2, 4))
+        cell_outputs = [torch.full((1, 2, 10), -10.0)]
+        
+        # Data sample with missing metadata
+        data_sample = TextRecogDataSample()
+        # No metainfo set - should use defaults
+        
+        try:
+            results = table_postprocessor.format_table_outputs(
+                structure_outputs, bbox_outputs, cell_outputs, [data_sample]
+            )
+            # Should handle missing metadata gracefully
+            assert len(results) == 1
+        except (KeyError, AttributeError) as e:
+            # If it fails, it should give a clear error message
+            assert "metainfo" in str(e) or "scale_factor" in str(e)
+
+    def test_table_cell_dictionary_attribute_missing(self, table_postprocessor):
+        """Test fallback behavior when cell dictionary is missing attributes."""
+        # Remove end_idx from cell dictionary
+        if hasattr(table_postprocessor.cell_dictionary, 'end_idx'):
+            original_end_idx = table_postprocessor.cell_dictionary.end_idx
+            del table_postprocessor.cell_dictionary.end_idx
+        
+        try:
+            outputs = torch.full((1, 3, 10), -10.0)
+            outputs[0, 0, 4] = 10.0  # 'a'
+            outputs[0, 1, 5] = 10.0  # 'b'
+            outputs[0, 2, 1] = 10.0  # Should use main dictionary's end_idx
+            
+            indexes, scores = table_postprocessor._tensor2idx_cell(outputs)
+            
+            # Should fallback to main dictionary's end_idx
+            assert len(indexes) == 1
+            assert len(indexes[0]) == 2  # Should stop at end token using fallback
+            
+        finally:
+            # Restore attribute if it existed
+            if 'original_end_idx' in locals():
+                table_postprocessor.cell_dictionary.end_idx = original_end_idx
+
+    def test_table_bbox_mask_with_unexpected_tokens(self, table_postprocessor):
+        """Test bbox mask generation with unexpected tokens."""
+        strings = [
+            '<table>,<unknown_tag>,</table>',  # Unknown tag
+            '<tr>,<td>,missing_closing_tag',   # <td> with > should NOT get mask 1 (only <td without > does)
+            '',                                 # Empty string
+            '<td></td>'                        # Single token
+        ]
+        
+        masks = table_postprocessor._get_pred_bbox_mask(strings)
+        
+        assert len(masks) == 4
+        # Unknown tags should get mask 0
+        assert masks[0] == [0, 0, 0]
+        # <td> with closing > should get mask 0 (only <td without > gets mask 1)
+        assert masks[1] == [0, 0, 0]
+        # Empty string should result in empty mask
+        assert len(masks[2]) == 0
+        # Single <td></td> should get mask 1
+        assert masks[3] == [1]
+
+    def test_bbox_mask_exact_token_matching(self, table_postprocessor):
+        """Test that only exact tokens '<td></td>' and '<td' generate bbox masks."""
+        strings = [
+            '<td></td>',         # Should be 1 - exact match
+            '<td',               # Should be 1 - exact match (no closing >)
+            '<td>',              # Should be 0 - has closing >
+            '</td>',             # Should be 0 - closing tag  
+            '<th></th>',         # Should be 0 - not supported per comment
+            '<th>',              # Should be 0 - not supported
+            '<table>,<td></td>,<td,</table>',  # Mixed case
+        ]
+        
+        masks = table_postprocessor._get_pred_bbox_mask(strings)
+        
+        assert len(masks) == 7
+        assert masks[0] == [1]           # <td></td> -> 1
+        assert masks[1] == [1]           # <td -> 1
+        assert masks[2] == [0]           # <td> -> 0
+        assert masks[3] == [0]           # </td> -> 0
+        assert masks[4] == [0]           # <th></th> -> 0
+        assert masks[5] == [0]           # <th> -> 0
+        assert masks[6] == [0, 1, 1, 0]  # <table>,<td></td>,<td,</table> -> [0,1,1,0]
+
+    def test_bbox_mask_special_token_handling(self, table_postprocessor):
+        """Test handling of special tokens (EOS, PAD, SOS) in bbox mask generation."""
+        # Mock the special tokens based on dictionary
+        table_postprocessor.dictionary.idx2str = lambda x: {
+            0: ['<BOS>'],
+            1: ['<EOS>'],
+            2: ['<PAD>']
+        }.get(x[0], ['<UKN>'])
+        
+        strings = [
+            '<BOS>,<td></td>,<EOS>',     # EOS should break the loop
+            '<PAD>,<td></td>,<td',       # PAD should be skipped  
+            '<BOS>,<table>,<td',         # SOS should be skipped
+            '<EOS>',                     # EOS at start should break immediately
+        ]
+        
+        masks = table_postprocessor._get_pred_bbox_mask(strings)
+        
+        assert len(masks) == 4
+        assert masks[0] == [0, 1, 0]     # <BOS>(skip), <td></td>(1), <EOS>(break)
+        assert masks[1] == [0, 1, 1]     # <PAD>(skip), <td></td>(1), <td(1)
+        assert masks[2] == [0, 0, 1]     # <BOS>(skip), <table>(0), <td(1)
+        assert masks[3] == [0]           # <EOS>(break) -> should result in [0] and break
+
+    def test_bbox_mask_whitespace_handling(self, table_postprocessor):
+        """Test whitespace handling in bbox mask generation."""
+        strings = [
+            ' <td></td> , <td ',          # Spaces around tokens
+            '<td></td>,  ,<td',           # Empty token after split
+            '\t<td></td>\t,\n<td\n',      # Tabs and newlines
+        ]
+        
+        masks = table_postprocessor._get_pred_bbox_mask(strings)
+        
+        assert len(masks) == 3
+        assert masks[0] == [1, 1]        # Spaces should be stripped
+        assert masks[1] == [1, 0, 1]     # Empty token should get 0
+        assert masks[2] == [1, 1]        # Tabs/newlines should be stripped

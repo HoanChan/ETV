@@ -207,14 +207,14 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
             
         return indexes, scores
     
-    def _get_pred_bbox_mask(self, strings: List[str]) -> np.ndarray:
+    def _get_pred_bbox_mask(self, strings: List[str]) -> List[List[int]]:
         """Generate bbox mask from predicted structure strings.
         
         Args:
             strings (List[str]): Predicted structure strings
             
         Returns:
-            np.ndarray: Bbox masks
+            List[List[int]]: Bbox masks (list of lists to handle variable lengths)
         """
         pred_bbox_masks = []
         sos_token = self.dictionary.idx2str([self.dictionary.start_idx])[0] if hasattr(self.dictionary, 'start_idx') else '<BOS>'
@@ -223,9 +223,10 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
         
         for string in strings:
             pred_bbox_mask = []
-            char_list = string.split(',')
+            char_list = string.split(',') if string else []
             
             for char in char_list:
+                char = char.strip()  # Remove whitespaces
                 if char == eos_token:
                     pred_bbox_mask.append(0)
                     break
@@ -234,6 +235,8 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
                     continue
                 else:
                     # Mark cells that should have bboxes
+                    # self-closing cell tags, with or without closing (rowspan/colspan is next token)
+                    # No <th> or <th></th> handling here because model does not predict them
                     if char in ['<td></td>', '<td']:
                         pred_bbox_mask.append(1)
                     else:
@@ -241,17 +244,17 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
                         
             pred_bbox_masks.append(pred_bbox_mask)
             
-        return np.array(pred_bbox_masks)
+        return pred_bbox_masks
     
     def _decode_bboxes(self, 
                       outputs_bbox: torch.Tensor,
-                      pred_bbox_masks: np.ndarray, 
+                      pred_bbox_masks: List[List[int]], 
                       data_samples: Sequence[TextRecogDataSample]) -> List[np.ndarray]:
         """Decode and denormalize bounding boxes.
         
         Args:
             outputs_bbox (torch.Tensor): Raw bbox outputs
-            pred_bbox_masks (np.ndarray): Bbox masks
+            pred_bbox_masks (List[List[int]]): Bbox masks
             data_samples (Sequence[TextRecogDataSample]): Data samples with metadata
             
         Returns:
@@ -267,8 +270,11 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
             scale_factor = img_meta.get('scale_factor', [1.0, 1.0])
             pad_shape = img_meta.get('pad_shape', img_meta.get('img_shape', [1, 1]))
             
+            # Convert list to numpy array for processing
+            pred_bbox_mask_array = np.array(pred_bbox_mask)
+            
             # Filter invalid bboxes
-            output_bbox = self._filter_invalid_bbox(output_bbox, pred_bbox_mask)
+            output_bbox = self._filter_invalid_bbox(output_bbox, pred_bbox_mask_array)
             
             # Denormalize to pad shape
             output_bbox[:, 0::2] = output_bbox[:, 0::2] * pad_shape[1]
