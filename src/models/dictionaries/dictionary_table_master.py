@@ -1,14 +1,11 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-# Dictionary classes for mmOCR 1.x TableMaster implementation
-
 from typing import List, Optional, Union
 import mmengine
 
-from mmocr.registry import MODELS
+from mmocr.registry import MODELS, TASK_UTILS
 from mmocr.models.common.dictionary import Dictionary
 
 
-@MODELS.register_module()
+@TASK_UTILS.register_module()
 class TableMasterDictionary(Dictionary):
     """Dictionary for table structure recognition in TableMaster.
     
@@ -66,25 +63,21 @@ class TableMasterDictionary(Dictionary):
             **kwargs
         )
     
-    def idx2str(self, indexes: List[List[int]]) -> List[str]:
-        """Convert character indices to structure strings.
+    def idx2str(self, indexes: List[int]) -> str:
+        """Convert character indices to structure string.
         
         Args:
-            indexes (List[List[int]]): Character indices
+            indexes (List[int]): Character indices
             
         Returns:
-            List[str]: Structure strings joined with commas
+            str: Structure string joined with commas
         """
-        strings = []
-        for index in indexes:
-            string = [self.idx2char[i] for i in index]
-            # Join structure tokens with commas for table parsing
-            string = ','.join(string)
-            strings.append(string)
-        return strings
+        string = [self._dict[i] for i in indexes]
+        # Join structure tokens with commas for table parsing
+        return ','.join(string)
 
 
-@MODELS.register_module()
+@TASK_UTILS.register_module()
 class TableMasterCellDictionary(Dictionary):
     """Dictionary for cell content recognition in TableMaster.
     
@@ -141,25 +134,21 @@ class TableMasterCellDictionary(Dictionary):
             **kwargs
         )
     
-    def idx2str(self, indexes: List[List[int]]) -> List[str]:
-        """Convert character indices to cell content strings.
+    def idx2str(self, indexes: List[int]) -> str:
+        """Convert character indices to cell content string.
         
         Args:
-            indexes (List[List[int]]): Character indices
+            indexes (List[int]): Character indices
             
         Returns:
-            List[str]: Cell content strings
+            str: Cell content string
         """
-        strings = []
-        for index in indexes:
-            string = [self.idx2char[i] for i in index]
-            # Join characters directly for cell content
-            string = ''.join(string)
-            strings.append(string)
-        return strings
+        string = [self._dict[i] for i in indexes]
+        # Join characters directly for cell content
+        return ''.join(string)
 
 
-@MODELS.register_module()
+@TASK_UTILS.register_module()
 class MasterDictionary(Dictionary):
     """Basic dictionary for Master recognition tasks.
     
@@ -206,7 +195,15 @@ class MasterDictionary(Dictionary):
                     dict_list.append(line)
         elif dict_list is None:
             # Use predefined dictionary types
-            dict_list = self._get_predefined_dict(dict_type)
+            if dict_type == 'DICT36':
+                dict_list = list('0123456789abcdefghijklmnopqrstuvwxyz')
+            elif dict_type == 'DICT90':
+                chars = list('0123456789abcdefghijklmnopqrstuvwxyz')
+                chars.extend(list('ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+                chars.extend(list('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ '))
+                dict_list = chars
+            else:
+                raise ValueError(f"Unknown dict_type: {dict_type}")
         
         super().__init__(
             dict_list=dict_list,
@@ -222,23 +219,3 @@ class MasterDictionary(Dictionary):
             unknown_token=unknown_token,
             **kwargs
         )
-    
-    def _get_predefined_dict(self, dict_type: str) -> List[str]:
-        """Get predefined dictionary by type.
-        
-        Args:
-            dict_type (str): Dictionary type
-            
-        Returns:
-            List[str]: Character list
-        """
-        # Basic character sets - extend as needed
-        if dict_type == 'DICT36':
-            return list('0123456789abcdefghijklmnopqrstuvwxyz')
-        elif dict_type == 'DICT90':
-            chars = list('0123456789abcdefghijklmnopqrstuvwxyz')
-            chars.extend(list('ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
-            chars.extend(list('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ '))
-            return chars
-        else:
-            raise ValueError(f"Unknown dict_type: {dict_type}")
