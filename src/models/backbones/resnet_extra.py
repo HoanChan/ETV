@@ -73,8 +73,8 @@ class ResNetExtra(nn.Module):
     def init_weights(self):
         # Support both mmOCR 1.x style (no parameters) and original style (with pretrained parameter)
         if hasattr(self, 'init_cfg') and self.init_cfg is not None:
-            # Use mmcv init system if init_cfg is provided
-            from mmcv.cnn import initialize
+            # Use mmengine init system if init_cfg is provided
+            from mmengine.model import initialize
             initialize(self, self.init_cfg)
         else:
             # Original initialization logic
@@ -96,14 +96,14 @@ class ResNetExtra(nn.Module):
         layers = []
         
         # Create first block with downsample
-        first_block = block(self.inplanes, planes, stride, downsample)
+        first_block = block(self.inplanes, planes, stride=stride, downsample=downsample)
         layers.append(first_block)
         
         self.inplanes = planes * block.expansion
         
         # Add remaining blocks
         for i in range(1, blocks):
-            block_instance = block(self.inplanes, planes)
+            block_instance = block(self.inplanes, planes, stride=1, downsample=None)
             layers.append(block_instance)
 
         # Add ContextBlock after the layer if gcb_config is provided
