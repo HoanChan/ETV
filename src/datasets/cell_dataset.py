@@ -1,9 +1,8 @@
-import os
+import copy
 import cv2
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from PIL import Image
-from mmengine.fileio import get_local_path
 
 from .table_dataset import PubTabNetDataset
 
@@ -30,10 +29,10 @@ class CellDataset(PubTabNetDataset):
         )
     )
 
-    def __init__(self, filter_empty_cells: bool = True, **kwargs):
+    def __init__(self, ignore_empty_cells: bool = True, max_cell_len: int = 150, **kwargs):
         kwargs['task_type'] = 'content' # load only cell data in super class
-        kwargs['ignore_empty_cells'] = filter_empty_cells
-        self.filter_empty_cells = filter_empty_cells
+        kwargs['ignore_empty_cells'] = ignore_empty_cells
+        kwargs['max_cell_len'] = max_cell_len
         super().__init__(**kwargs)
 
     def load_data_list(self) -> List[Dict]:
@@ -43,20 +42,21 @@ class CellDataset(PubTabNetDataset):
         for table_info in table_data_list:
             img_path = table_info['img_path']
             imgid = table_info.get('sample_idx', 0)
-            for idx, inst in enumerate(table_info['instances']):
-                if inst.get('task_type') != 'content':
-                    continue
+            # Filter only content instances (skip structure instances)
+            content_instances = [inst for inst in table_info['instances'] 
+                               if inst.get('task_type', 'content') == 'content']
+            
+            for inst in content_instances:
                 bbox = inst.get('bbox', [])
-                if len(bbox) != 4:
-                    continue
-                if self.filter_empty_cells and not inst.get('text'):
-                    continue
+                if self.ignore_empty_cells and not inst.get('text'): continue
+                if len(bbox) != 4: continue
+                cell_id = inst.get('cell_id', 0)
                 data_info = {
                     'img_path': img_path,
                     'height': None,
                     'width': None,
                     'bbox': bbox,
-                    'sample_idx': f"{imgid}_{idx}",
+                    'sample_idx': f"{imgid}_{cell_id}",
                     'original_imgid': imgid,
                     'instances': [inst],
                 }
@@ -79,7 +79,14 @@ class CellDataset(PubTabNetDataset):
             return None
 
     def get_data_info(self, idx: int) -> Dict:
-        data_info = self.data_list[idx].copy()
+        # Force initialize data_list if needed
+        if len(self.data_list) == 0: # This might be a lazy init issue, try to force load
+            try: self.data_list = self.load_data_list()
+            except: pass
+        
+        if idx >= len(self.data_list):
+            raise IndexError(f"Index {idx} out of range for data_list of length {len(self.data_list)}")
+        data_info = copy.deepcopy(self.data_list[idx])
         cell_image = self.crop_cell_image(data_info['img_path'], data_info['bbox'])
         if cell_image is not None:
             h, w = cell_image.shape[:2]
