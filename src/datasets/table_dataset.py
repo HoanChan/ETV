@@ -1,7 +1,7 @@
 import os
 import bz2
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from mmengine.dataset import BaseDataset
 from mmengine.fileio import get_local_path
 
@@ -58,7 +58,7 @@ class PubTabNetDataset(BaseDataset):
             Defaults to 'both'.
         split_filter (str, optional): Filter data by split ('train', 'val', 'test').
             If None, all splits will be included. Defaults to None.
-        max_seq_len (int): Maximum sequence length for structure tokens.
+        max_structure_len (int): Maximum sequence length for structure tokens.
             Defaults to 500.
         max_cell_len (int): Maximum sequence length for cell content.
             Defaults to 150.
@@ -80,7 +80,7 @@ class PubTabNetDataset(BaseDataset):
     def __init__(self,
                  task_type: str = 'both',
                  split_filter: Optional[str] = None,
-                 max_seq_len: int = 500,
+                 max_structure_len: int = 500,
                  max_cell_len: int = 150,
                  ignore_empty_cells: bool = True,
                  **kwargs):
@@ -92,7 +92,7 @@ class PubTabNetDataset(BaseDataset):
 
         self.task_type = task_type
         self.split_filter = split_filter
-        self.max_seq_len = max_seq_len
+        self.max_structure_len = max_structure_len
         self.max_cell_len = max_cell_len
         self.ignore_empty_cells = ignore_empty_cells
         
@@ -131,33 +131,35 @@ class PubTabNetDataset(BaseDataset):
     def parse_data_info(self, raw_data_info: Dict) -> Optional[Dict]:
         """Parse raw data info to mmOCR format with 'instances' key.
         https://mmocr.readthedocs.io/en/latest/basic_concepts/datasets.html
-
+        https://github.com/open-mmlab/mmengine/blob/main/mmengine/dataset/base_dataset.py
         {
             "metainfo":
             {
-                "dataset_type": "TextDetDataset",  # Options: TextDetDataset/TextRecogDataset/TextSpotterDataset
-                "task_name": "textdet",  #  Options: textdet/textspotter/textrecog
-                "category": [{"id": 0, "name": "text"}]  # Used in textdet/textspotter
+              "dataset_type": "test_dataset",
+              "task_name": "test_task"
             },
-            "data_list": 
+            "data_list":
             [
-                {
-                    "img_path": "test_img.jpg",
-                    "height": 604,
-                    "width": 640,
-                    "instances":  # multiple instances in one image
-                    [
-                        {
-                            "bbox": [0, 0, 10, 20],  # in textdet/textspotter, [x1, y1, x2, y2].
-                            "bbox_label": 0,  # The object category, always 0 (text) in MMOCR
-                            "polygon": [0, 0, 0, 10, 10, 20, 20, 0], # in textdet/textspotter. [x1, y1, x2, y2, ....]
-                            "text": "mmocr",  # in textspotter/textrecog
-                            "ignore": False # in textspotter/textdet. Whether to ignore this sample during training
-                        },
-                        #...
-                    ],
-                }
-                #... multiple images
+              {
+                "img_path": "test_img.jpg",
+                "height": 604,
+                "width": 640,
+                "instances":
+                [
+                  {
+                    "bbox": [0, 0, 10, 20],
+                    "bbox_label": 1,
+                    "mask": [[0,0],[0,10],[10,20],[20,0]],
+                    "extra_anns": [1,2,3]
+                  },
+                  {
+                    "bbox": [10, 10, 110, 120],
+                    "bbox_label": 2,
+                    "mask": [[10,10],[10,110],[110,120],[120,10]],
+                    "extra_anns": [4,5,6]
+                  }
+                ]
+              },
             ]
         }
         
@@ -184,7 +186,7 @@ class PubTabNetDataset(BaseDataset):
                 # Structure recognition instance
                 structure_data = html_data.get('structure', {})
                 structure_tokens = structure_data.get('tokens', [])
-                structure_text = ' '.join(structure_tokens[:self.max_seq_len])
+                structure_text = ''.join(structure_tokens[:self.max_structure_len])
                 
                 structure_instance = {
                     'text': structure_text
@@ -205,7 +207,7 @@ class PubTabNetDataset(BaseDataset):
                     if not cell_tokens and self.ignore_empty_cells:
                         continue
                     
-                    cell_text = ' '.join(cell_tokens[:self.max_cell_len]) if cell_tokens else ''
+                    cell_text = ''.join(cell_tokens[:self.max_cell_len]) if cell_tokens else ''
                     
                     cell_instance = {
                         'text': cell_text,
@@ -214,10 +216,10 @@ class PubTabNetDataset(BaseDataset):
                     if self.task_type == 'both':
                         cell_instance['task_type'] = 'content'
                     
-                    # Add bbox if available
-                    if len(cell_bbox) == 4:
-                        cell_instance['bbox'] = cell_bbox
-                    
+                    if len(cell_bbox) != 4: continue # Ensure bbox is valid
+
+                    cell_instance['bbox'] = cell_bbox
+
                     instances.append(cell_instance)
             
             # Store instances in the required format
