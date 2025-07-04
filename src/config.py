@@ -1,6 +1,5 @@
 import os
 
-# DUMP xem ở đây: https://dumps.wikimedia.org/other/enterprise_html/runs
 DIR_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_ROOT = r'F:/data' if os.name == 'nt' else '/media/hoanchan/USB-BACKUP/data'
 
