@@ -35,7 +35,7 @@ class PubTabNetDataset(BaseDataset):
         'imgid': int,
         'html': {
             'structure': {'tokens': [str]},
-            'cell': [
+            'cells': [
                 {
                     'tokens': [str],
                     'bbox': [x0, y0, x1, y1]  # only non-empty cells have this
@@ -85,13 +85,11 @@ class PubTabNetDataset(BaseDataset):
                  ignore_empty_cells: bool = True,
                  **kwargs):
         
-        assert task_type in ['structure', 'content', 'both'], \
-            f"task_type must be 'structure', 'content', or 'both', got {task_type}"
+        assert task_type in ['structure', 'content', 'both'], f"task_type must be 'structure', 'content', or 'both', got {task_type}"
         
         if split_filter is not None:
-            assert split_filter in ['train', 'val', 'test'], \
-                f"split_filter must be 'train', 'val', or 'test', got {split_filter}"
-        
+            assert split_filter in ['train', 'val', 'test'], f"split_filter must be 'train', 'val', or 'test', got {split_filter}"
+
         self.task_type = task_type
         self.split_filter = split_filter
         self.max_seq_len = max_seq_len
@@ -106,12 +104,8 @@ class PubTabNetDataset(BaseDataset):
             # Check if file is compressed with bz2
             if local_path.endswith('.bz2'):
                 with bz2.open(local_path, 'rt', encoding='utf-8') as f:
-                    if local_path.endswith('.jsonl.bz2'):
-                        # Line-by-line JSON format compressed with bz2
-                        raw_data_list = [json_loads(line.strip()) for line in f if line.strip()]
-                    else:
-                        # Standard JSON format compressed with bz2
-                        raw_data_list = json_load(f)
+                    # All bz2 files are treated as JSONL format
+                    raw_data_list = [json_loads(line.strip()) for line in f if line.strip()]
             else:
                 with open(local_path, 'r', encoding='utf-8') as f:
                     if local_path.endswith('.jsonl'):
@@ -135,7 +129,39 @@ class PubTabNetDataset(BaseDataset):
         return data_list
 
     def parse_data_info(self, raw_data_info: Dict) -> Optional[Dict]:
-        """Parse raw data info to mmOCR format with 'instances' key."""
+        """Parse raw data info to mmOCR format with 'instances' key.
+        https://mmocr.readthedocs.io/en/latest/basic_concepts/datasets.html
+
+        {
+            "metainfo":
+            {
+                "dataset_type": "TextDetDataset",  # Options: TextDetDataset/TextRecogDataset/TextSpotterDataset
+                "task_name": "textdet",  #  Options: textdet/textspotter/textrecog
+                "category": [{"id": 0, "name": "text"}]  # Used in textdet/textspotter
+            },
+            "data_list": 
+            [
+                {
+                    "img_path": "test_img.jpg",
+                    "height": 604,
+                    "width": 640,
+                    "instances":  # multiple instances in one image
+                    [
+                        {
+                            "bbox": [0, 0, 10, 20],  # in textdet/textspotter, [x1, y1, x2, y2].
+                            "bbox_label": 0,  # The object category, always 0 (text) in MMOCR
+                            "polygon": [0, 0, 0, 10, 10, 20, 20, 0], # in textdet/textspotter. [x1, y1, x2, y2, ....]
+                            "text": "mmocr",  # in textspotter/textrecog
+                            "ignore": False # in textspotter/textdet. Whether to ignore this sample during training
+                        },
+                        #...
+                    ],
+                }
+                #... multiple images
+            ]
+        }
+        
+        """
         try:
             data_info = {}
             
@@ -161,14 +187,15 @@ class PubTabNetDataset(BaseDataset):
                 structure_text = ' '.join(structure_tokens[:self.max_seq_len])
                 
                 structure_instance = {
-                    'text': structure_text,
-                    'task_type': 'structure'
+                    'text': structure_text
                 }
+                if self.task_type == 'both':
+                    structure_instance['task_type'] = 'structure'
                 instances.append(structure_instance)
             
             if self.task_type in ['content', 'both']:
                 # Cell content recognition instances
-                cells_data = html_data.get('cell', [])
+                cells_data = html_data.get('cells', [])
                 
                 for idx, cell in enumerate(cells_data):
                     cell_tokens = cell.get('tokens', [])
@@ -182,9 +209,10 @@ class PubTabNetDataset(BaseDataset):
                     
                     cell_instance = {
                         'text': cell_text,
-                        'task_type': 'content',
                         'cell_id': idx
                     }
+                    if self.task_type == 'both':
+                        cell_instance['task_type'] = 'content'
                     
                     # Add bbox if available
                     if len(cell_bbox) == 4:
@@ -207,15 +235,6 @@ class PubTabNetDataset(BaseDataset):
         except Exception as e:
             print(f"Error parsing data info for {raw_data_info.get('filename', 'unknown')}: {e}")
             return None
-
-    def get_data_info(self, idx: int) -> Dict:
-        """Get data info by index."""
-        data_info = super().get_data_info(idx)
-        
-        # Add task-specific information
-        data_info['task_type'] = self.task_type
-        
-        return data_info
 
     def __repr__(self) -> str:
         """Print the basic information of the dataset."""
