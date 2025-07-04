@@ -10,11 +10,15 @@ NUM_PROCESSES = os.cpu_count()  # One threads per logic core
 STRUCTURE_VOCAB_FILE = os.path.join(DIR_ROOT, 'data', 'structure_vocab.txt')
 CELL_VOCAB_FILE = os.path.join(DIR_ROOT, 'data', 'cell_vocab.txt')
 
-# Processing options
-PUBTABNET_IMAGE_ROOT = os.path.join(DATA_ROOT, 'pubtabnet')
-PUBTABNET_TEST_JSON = os.path.join(PUBTABNET_IMAGE_ROOT, 'test.jsonl')
-
-VITABSET_IMAGE_ROOT = os.path.join(DATA_ROOT, 'vitabset')
-VITABSET_TRAIN_JSON = os.path.join(VITABSET_IMAGE_ROOT, 'train.jsonl')
-VITABSET_VAL_JSON = os.path.join(VITABSET_IMAGE_ROOT, 'val.jsonl')
-VITABSET_TEST_JSON = os.path.join(VITABSET_IMAGE_ROOT, 'test.jsonl')
+# PubTabNet dataset paths
+PUBTABNET_ROOT = os.path.join(DATA_ROOT, 'pubtabnet')
+PUBTABNET_TEST_IMAGE_ROOT = os.path.join(PUBTABNET_ROOT, 'test')
+PUBTABNET_TEST_JSON = os.path.join(PUBTABNET_ROOT, 'test.jsonl')
+# VitabSet dataset paths
+VITABSET_ROOT = os.path.join(DATA_ROOT, 'vitabset')
+VITABSET_TRAIN_IMAGE_ROOT = os.path.join(VITABSET_ROOT, 'train')
+VITABSET_VAL_IMAGE_ROOT = os.path.join(VITABSET_ROOT, 'val')
+VITABSET_TEST_IMAGE_ROOT = os.path.join(VITABSET_ROOT, 'test')
+VITABSET_TRAIN_JSON = os.path.join(VITABSET_ROOT, 'train.bz2')
+VITABSET_VAL_JSON = os.path.join(VITABSET_ROOT, 'val.bz2')
+VITABSET_TEST_JSON = os.path.join(VITABSET_ROOT, 'test.bz2')
