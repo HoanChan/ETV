@@ -1,8 +1,4 @@
-import os
 import pytest
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
-
 from models.metric.teds_metric import TEDSMetric
 
 

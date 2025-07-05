@@ -1,16 +1,8 @@
 import pytest
 import torch
 import torch.nn as nn
-from unittest.mock import patch, MagicMock
-import sys
-import os
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
-
-# Import the module directly
+from unittest.mock import patch
 from models.backbones.resnet_extra import ResNetExtra, conv3x3, conv1x1, get_gcb_config
-
 
 class TestResNetExtra:
     """Test cases for ResNetExtra backbone"""

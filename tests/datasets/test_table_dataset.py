@@ -3,10 +3,8 @@ import tempfile
 import os
 import json
 import bz2
-from unittest.mock import patch, MagicMock, mock_open
-from mmengine.fileio import get_local_path
+from unittest.mock import patch, mock_open
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from datasets.table_dataset import PubTabNetDataset
 

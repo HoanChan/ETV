@@ -1,7 +1,4 @@
-import os
 import pytest
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from models.metric.post_processing import (
     text_to_list,

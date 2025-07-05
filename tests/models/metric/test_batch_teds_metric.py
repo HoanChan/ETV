@@ -1,8 +1,5 @@
-import os
 import pytest
-import sys
-from unittest.mock import Mock, patch, MagicMock
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+from unittest.mock import Mock, patch
 
 from models.metric.batch_teds_metric import BatchTEDSMetric
 
