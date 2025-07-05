@@ -1,12 +1,9 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import numpy as np
 from PIL import Image
 from mmcv.transforms.base import BaseTransform
-
-# from mmocr.registry import TRANSFORMS
-from mmengine.registry import TRANSFORMS
-
+from mmocr.registry import TRANSFORMS
 
 @TRANSFORMS.register_module()
 class GetCells(BaseTransform):
@@ -24,8 +21,6 @@ class GetCells(BaseTransform):
         
     Added Keys:
         - cell_imgs (list[ndarray]): List các ảnh cell đã cắt
-        - cell_tokens (list[str]): List ground truth tokens tương ứng
-        - cell_bboxes (list[list]): List bbox đã sử dụng
     
     Args:
         img_key (str): Key của ảnh trong results dict. Defaults to 'img'.
@@ -67,8 +62,6 @@ class GetCells(BaseTransform):
         img_h, img_w = img.shape[:2]
         
         cell_imgs = []
-        cell_tokens = []
-        cell_bboxes = []
         
         instances = results.get(self.instances_key, [])
         
@@ -79,10 +72,9 @@ class GetCells(BaseTransform):
                     continue
                     
             bbox = inst.get('bbox', None)
-            tokens = inst.get('tokens', None)
             
             # Skip if missing required fields
-            if bbox is None or tokens is None:
+            if bbox is None:
                 continue
                 
             # Validate bbox format
@@ -122,13 +114,9 @@ class GetCells(BaseTransform):
             cell_img = img[y0:y1, x0:x1].copy()
             
             cell_imgs.append(cell_img)
-            cell_tokens.append(tokens)
-            cell_bboxes.append([x0, y0, x1, y1])
         
         # Add results
         results['cell_imgs'] = cell_imgs
-        results['cell_tokens'] = cell_tokens
-        results['cell_bboxes'] = cell_bboxes
         
         return results
         

@@ -18,26 +18,21 @@ def sample_instances():
     return [
         {
             'bbox': [10, 10, 40, 30],  # Valid cell
-            'tokens': ['Cell', '1'],
             'task_type': 'content'
         },
         {
             'bbox': [50, 20, 90, 50],  # Valid cell
-            'tokens': ['Cell', '2'], 
             'task_type': 'content'
         },
         {
             'bbox': [5, 5, 8, 8],  # Too small cell (3x3)
-            'tokens': ['Small'],
             'task_type': 'content'
         },
         {
-            'tokens': ['No', 'bbox'],  # Missing bbox
-            'task_type': 'content'
+            'task_type': 'content'  # Missing bbox
         },
         {
             'bbox': [10, 10, 40, 30],  # Structure task (should be filtered)
-            'tokens': ['<tr>', '<td>'],
             'task_type': 'structure'
         }
     ]
@@ -76,21 +71,13 @@ def test_basic_cell_extraction(sample_results):
     
     # Should extract 2 valid cells (filtering out small cell, missing bbox, and structure task)
     assert 'cell_imgs' in results
-    assert 'cell_tokens' in results
-    assert 'cell_bboxes' in results
     
     assert len(results['cell_imgs']) == 2
-    assert len(results['cell_tokens']) == 2
-    assert len(results['cell_bboxes']) == 2
     
-    # Check first cell
-    assert results['cell_tokens'][0] == ['Cell', '1']
-    assert results['cell_bboxes'][0] == [10, 10, 40, 30]
+    # Check first cell shape
     assert results['cell_imgs'][0].shape == (20, 30, 3)  # h=30-10, w=40-10
     
-    # Check second cell
-    assert results['cell_tokens'][1] == ['Cell', '2']
-    assert results['cell_bboxes'][1] == [50, 20, 90, 50]
+    # Check second cell shape
     assert results['cell_imgs'][1].shape == (30, 40, 3)  # h=50-20, w=90-50
 
 
@@ -101,8 +88,6 @@ def test_no_task_filter(sample_results):
     
     # Should extract 3 cells (including structure task, but still filtering small/missing bbox)
     assert len(results['cell_imgs']) == 3
-    assert len(results['cell_tokens']) == 3
-    assert ['<tr>', '<td>'] in results['cell_tokens']
 
 
 def test_pil_image_input(sample_instances):
@@ -120,32 +105,28 @@ def test_pil_image_input(sample_instances):
     assert len(results['cell_imgs']) == 2
     assert isinstance(results['cell_imgs'][0], np.ndarray)
 
-@pytest.mark.parametrize("test_instances,expected_count,expected_bboxes", [
+@pytest.mark.parametrize("test_instances,expected_count", [
     # Test with various invalid/edge case bboxes
     ([
         {
             'bbox': [-5, -5, 20, 25],  # Negative coordinates
-            'tokens': ['Negative', 'coords'],
             'task_type': 'content'
         },
         {
             'bbox': [80, 70, 150, 120],  # Exceeds image bounds
-            'tokens': ['Out', 'of', 'bounds'],
             'task_type': 'content'
         },
         {
             'bbox': [30, 20, 20, 30],  # Reversed coordinates (x1 < x0)
-            'tokens': ['Reversed', 'coords'],
             'task_type': 'content'
         },
         {
             'bbox': [10, 20, 10, 30],  # Zero width
-            'tokens': ['Zero', 'width'],
             'task_type': 'content'
         }
-    ], 3, [(0, 0, 20, 25), (80, 70, 100, 80), (20, 20, 30, 30)]),  # Expected clipped coords
+    ], 3),  # Expected count: 3 valid cells after clipping/validation
 ])
-def test_bbox_validation_and_clipping(sample_img, test_instances, expected_count, expected_bboxes):
+def test_bbox_validation_and_clipping(sample_img, test_instances, expected_count):
     """Test bbox validation and clipping to image boundaries."""
     results = {
         'img': sample_img,
@@ -158,37 +139,31 @@ def test_bbox_validation_and_clipping(sample_img, test_instances, expected_count
     # Should handle all cases appropriately
     assert len(results['cell_imgs']) == expected_count
     
-    # Check clipped coordinates
-    bboxes = results['cell_bboxes']
-    for bbox in bboxes:
-        x0, y0, x1, y1 = bbox
-        assert 0 <= x0 < x1 <= 100  # Within image width
-        assert 0 <= y0 < y1 <= 80   # Within image height
+    # Check that extracted images have valid dimensions
+    for cell_img in results['cell_imgs']:
+        assert cell_img.shape[0] > 0  # Height > 0
+        assert cell_img.shape[1] > 0  # Width > 0
 
 
 @pytest.mark.parametrize("invalid_instances", [
     # Too few coordinates
     ([{
         'bbox': [10, 20],
-        'tokens': ['Invalid', 'bbox', '1'],
         'task_type': 'content'
     }]),
     # Too many coordinates  
     ([{
         'bbox': [10, 20, 30, 40, 50],
-        'tokens': ['Invalid', 'bbox', '2'],
         'task_type': 'content'
     }]),
     # Non-numeric
     ([{
         'bbox': ['a', 'b', 'c', 'd'],
-        'tokens': ['Invalid', 'bbox', '3'],
         'task_type': 'content'
     }]),
     # None bbox
     ([{
         'bbox': None,
-        'tokens': ['Invalid', 'bbox', '4'],
         'task_type': 'content'
     }])
 ])
@@ -204,8 +179,6 @@ def test_invalid_bbox_formats(sample_img, invalid_instances):
     
     # Should extract no cells due to invalid bboxes
     assert len(results['cell_imgs']) == 0
-    assert len(results['cell_tokens']) == 0
-    assert len(results['cell_bboxes']) == 0
 
 
 @pytest.mark.parametrize("min_cell_size,expected_count", [
@@ -218,12 +191,10 @@ def test_min_cell_size_filtering(sample_img, min_cell_size, expected_count):
     small_instances = [
         {
             'bbox': [10, 10, 14, 14],  # 4x4 cell
-            'tokens': ['Small', 'cell'],
             'task_type': 'content'
         },
         {
             'bbox': [20, 20, 25, 30],  # 5x10 cell
-            'tokens': ['Valid', 'cell'],
             'task_type': 'content'
         }
     ]
@@ -255,8 +226,6 @@ def test_empty_or_missing_instances(sample_img, test_input, expected_count):
     results = transform(results)
     
     assert len(results['cell_imgs']) == expected_count
-    assert len(results['cell_tokens']) == expected_count
-    assert len(results['cell_bboxes']) == expected_count
 
 def test_grayscale_image(sample_instances):
     """Test with grayscale image."""
