@@ -1,5 +1,6 @@
 import os
 import bz2
+import random
 from typing import Dict, List, Optional
 from mmengine.dataset import BaseDataset
 from mmengine.fileio import get_local_path
@@ -53,6 +54,9 @@ class PubTabNetDataset(BaseDataset):
             Defaults to True.
         max_data (int): Maximum number of data samples to load. If -1, load all data.
             Useful for debugging and testing. Defaults to -1.
+        random_sample (bool): Whether to randomly sample max_data samples instead of 
+            taking the first max_data samples. Only effective when max_data > 0.
+            Defaults to False.
         **kwargs: Other arguments passed to BaseDataset.
     """
 
@@ -73,6 +77,7 @@ class PubTabNetDataset(BaseDataset):
                  max_cell_len: int = 150,
                  ignore_empty_cells: bool = True,
                  max_data: int = -1,
+                 random_sample: bool = False,
                  **kwargs):
         
         assert task_type in ['structure', 'content', 'both'], f"task_type must be 'structure', 'content', or 'both', got {task_type}"
@@ -86,6 +91,7 @@ class PubTabNetDataset(BaseDataset):
         self.max_cell_len = max_cell_len
         self.ignore_empty_cells = ignore_empty_cells
         self.max_data = max_data
+        self.random_sample = random_sample
         
         super().__init__(**kwargs)
 
@@ -119,7 +125,12 @@ class PubTabNetDataset(BaseDataset):
 
         # Limit data if max_data is specified and >= 0
         if self.max_data >= 0:
-            data_list = data_list[:self.max_data]
+            if self.random_sample and self.max_data > 0 and len(data_list) > self.max_data:
+                # Randomly sample max_data samples
+                data_list = random.sample(data_list, self.max_data)
+            else:
+                # Take first max_data samples
+                data_list = data_list[:self.max_data]
 
         return data_list
 
@@ -234,6 +245,7 @@ class PubTabNetDataset(BaseDataset):
                    f'task_type={self.task_type}, '
                    f'split_filter={self.split_filter}, '
                    f'max_data={self.max_data}, '
+                   f'random_sample={self.random_sample}, '
                    f'num_samples={len(self)}, '
                    f'ann_file={self.ann_file})')
         return repr_str

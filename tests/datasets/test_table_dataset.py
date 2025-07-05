@@ -5,6 +5,7 @@ import json
 import bz2
 from unittest.mock import patch, mock_open
 import sys
+import random
 
 from datasets.table_dataset import PubTabNetDataset
 
@@ -531,3 +532,358 @@ class TestPubTabNetDataset:
         repr_str = repr(dataset)
         assert 'max_data=100' in repr_str
         assert 'PubTabNetDataset' in repr_str
+    
+    def test_random_sample_default(self):
+        """Test that random_sample=False by default takes first N samples."""
+        # Create sample data with multiple items
+        sample_data = []
+        for i in range(10):
+            sample = {
+                'filename': f'test_table_{i}.png',
+                'split': 'train',
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        # Create temp file with multiple samples
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test with max_data=5, random_sample=False (default)
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=False,
+                lazy_init=True
+            )
+            
+            data_list = dataset.load_data_list()
+            assert len(data_list) == 5
+            
+            # Should get first 5 samples in order
+            expected_filenames = [f'test_table_{i}.png' for i in range(5)]
+            actual_filenames = [os.path.basename(data['img_path']) for data in data_list]
+            assert actual_filenames == expected_filenames
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_random_sample_enabled(self):
+        """Test that random_sample=True randomly samples N samples."""
+        # Create sample data with multiple items
+        sample_data = []
+        for i in range(20):
+            sample = {
+                'filename': f'test_table_{i:02d}.png',  # Use zero-padded format for consistent sorting
+                'split': 'train',
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        # Create temp file with multiple samples
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Set random seed for reproducible test
+            random.seed(42)
+            
+            # Test with max_data=5, random_sample=True
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list1 = dataset.load_data_list()
+            assert len(data_list1) == 5
+            
+            # Reset seed and create another dataset
+            random.seed(42)
+            dataset2 = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list2 = dataset2.load_data_list()
+            
+            # Should get same random samples with same seed
+            filenames1 = [os.path.basename(data['img_path']) for data in data_list1]
+            filenames2 = [os.path.basename(data['img_path']) for data in data_list2]
+            assert filenames1 == filenames2
+            
+            # Reset seed with different value to get different samples
+            random.seed(123)
+            dataset3 = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list3 = dataset3.load_data_list()
+            filenames3 = [os.path.basename(data['img_path']) for data in data_list3]
+            
+            # With high probability, different seed should give different samples
+            # (though theoretically they could be the same by chance)
+            assert len(set(filenames1 + filenames3)) > 5  # Should have more than 5 unique filenames total
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_random_sample_with_small_dataset(self):
+        """Test random_sample behavior when max_data >= available data."""
+        # Create sample data with 3 items
+        sample_data = []
+        for i in range(3):
+            sample = {
+                'filename': f'test_table_{i}.png',
+                'split': 'train',
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test with max_data=5 (more than available), random_sample=True
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list = dataset.load_data_list()
+            assert len(data_list) == 3  # Should return all available data
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_random_sample_with_max_data_zero(self):
+        """Test random_sample behavior with max_data=0."""
+        sample_data = [{
+            'filename': 'test_table.png',
+            'split': 'train',
+            'imgid': 12345,
+            'html': {
+                'structure': {'tokens': ['<table>', '</table>']},
+                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
+            }
+        }]
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=0,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list = dataset.load_data_list()
+            assert len(data_list) == 0
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_random_sample_with_split_filter(self):
+        """Test random_sample works correctly with split_filter."""
+        # Create sample data with different splits
+        sample_data = []
+        for i in range(12):  # 12 total samples
+            split = 'train' if i < 8 else 'val'  # 8 train, 4 val
+            sample = {
+                'filename': f'test_table_{i:02d}.png',
+                'split': split,
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test with split_filter='train', max_data=5, random_sample=True
+            random.seed(42)
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                split_filter='train',
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list = dataset.load_data_list()
+            assert len(data_list) == 5
+            
+            # Verify all samples are from train split
+            for data_info in data_list:
+                assert data_info['img_info']['split'] == 'train'
+                
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_repr_includes_random_sample(self):
+        """Test that __repr__ includes random_sample parameter."""
+        # Create a simple temp file
+        sample_data = [{
+            'filename': 'test_table.png',
+            'split': 'train',
+            'imgid': 12345,
+            'html': {
+                'structure': {'tokens': ['<table>', '</table>']},
+                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
+            }
+        }]
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                random_sample=True,
+                lazy_init=False
+            )
+            
+            repr_str = repr(dataset)
+            assert 'random_sample=True' in repr_str
+            assert 'PubTabNetDataset' in repr_str
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_max_data_and_random_sample_integration(self):
+        """Test max_data and random_sample work together correctly."""
+        # Create sample data with multiple items
+        sample_data = []
+        for i in range(15):
+            sample = {
+                'filename': f'test_table_{i:02d}.png',
+                'split': 'train',
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test 1: max_data + random_sample=False (sequential)
+            dataset1 = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=False,
+                lazy_init=True
+            )
+            
+            data_list1 = dataset1.load_data_list()
+            filenames1 = [os.path.basename(data['img_path']) for data in data_list1]
+            expected_sequential = [f'test_table_{i:02d}.png' for i in range(5)]
+            assert filenames1 == expected_sequential
+            
+            # Test 2: max_data + random_sample=True (random)
+            random.seed(42)
+            dataset2 = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list2 = dataset2.load_data_list()
+            filenames2 = [os.path.basename(data['img_path']) for data in data_list2]
+            
+            # Should get exactly 5 samples
+            assert len(filenames2) == 5
+            # Should be different from sequential (with high probability)
+            assert filenames1 != filenames2
+            # All filenames should be from the original dataset
+            all_original_names = [f'test_table_{i:02d}.png' for i in range(15)]
+            assert all(name in all_original_names for name in filenames2)
+            
+            # Test 3: Reproducibility with same seed
+            random.seed(42)
+            dataset3 = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                random_sample=True,
+                lazy_init=True
+            )
+            
+            data_list3 = dataset3.load_data_list()
+            filenames3 = [os.path.basename(data['img_path']) for data in data_list3]
+            assert filenames2 == filenames3  # Same seed should give same result
+            
+        finally:
+            os.unlink(temp_file.name)
