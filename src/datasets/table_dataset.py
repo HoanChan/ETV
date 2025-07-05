@@ -51,6 +51,8 @@ class PubTabNetDataset(BaseDataset):
             Defaults to 150.
         ignore_empty_cells (bool): Whether to ignore empty cells in training.
             Defaults to True.
+        max_data (int): Maximum number of data samples to load. If -1, load all data.
+            Useful for debugging and testing. Defaults to -1.
         **kwargs: Other arguments passed to BaseDataset.
     """
 
@@ -70,6 +72,7 @@ class PubTabNetDataset(BaseDataset):
                  max_structure_len: int = 500,
                  max_cell_len: int = 150,
                  ignore_empty_cells: bool = True,
+                 max_data: int = -1,
                  **kwargs):
         
         assert task_type in ['structure', 'content', 'both'], f"task_type must be 'structure', 'content', or 'both', got {task_type}"
@@ -82,6 +85,7 @@ class PubTabNetDataset(BaseDataset):
         self.max_structure_len = max_structure_len
         self.max_cell_len = max_cell_len
         self.ignore_empty_cells = ignore_empty_cells
+        self.max_data = max_data
         
         super().__init__(**kwargs)
 
@@ -112,6 +116,10 @@ class PubTabNetDataset(BaseDataset):
             data_info = self.parse_data_info(raw_data_info)
             if data_info is not None:
                 data_list.append(data_info)
+
+        # Limit data if max_data is specified and >= 0
+        if self.max_data >= 0:
+            data_list = data_list[:self.max_data]
 
         return data_list
 
@@ -225,6 +233,7 @@ class PubTabNetDataset(BaseDataset):
         repr_str = (f'{self.__class__.__name__}('
                    f'task_type={self.task_type}, '
                    f'split_filter={self.split_filter}, '
+                   f'max_data={self.max_data}, '
                    f'num_samples={len(self)}, '
                    f'ann_file={self.ann_file})')
         return repr_str

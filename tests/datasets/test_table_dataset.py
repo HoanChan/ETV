@@ -367,3 +367,167 @@ class TestPubTabNetDataset:
         cell2_tokens = sample_annotation['html']['cells'][1]['tokens']
         expected_cell2 = cell2_tokens[:dataset.max_cell_len]  # Apply max length limit
         assert instances[1]['tokens'] == expected_cell2
+
+    def test_max_data_default(self, temp_json_file):
+        """Test that max_data=-1 loads all data by default."""
+        dataset = PubTabNetDataset(
+            ann_file=temp_json_file,
+            lazy_init=False
+        )
+        
+        # Should load all data when max_data=-1 (default)
+        assert dataset.max_data == -1
+        assert len(dataset) == 1  # Sample file has 1 item
+
+    def test_max_data_limit(self):
+        """Test that max_data limits the number of loaded samples."""
+        # Create sample data with multiple items
+        sample_data = []
+        for i in range(10):
+            sample = {
+                'filename': f'test_table_{i}.png',
+                'split': 'train',
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        # Create temp file with multiple samples
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test with max_data=5
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=5,
+                lazy_init=False
+            )
+            
+            assert dataset.max_data == 5
+            assert len(dataset) == 5  # Should be limited to 5
+            
+            # Test with max_data=3
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=3,
+                lazy_init=False
+            )
+            
+            assert len(dataset) == 3  # Should be limited to 3
+            
+            # Test with max_data larger than available data
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=20,
+                lazy_init=False
+            )
+            
+            assert len(dataset) == 10  # Should return all available data (10)
+            
+        finally:
+            # Cleanup
+            os.unlink(temp_file.name)
+
+    def test_max_data_with_split_filter(self):
+        """Test max_data works correctly with split_filter."""
+        # Create sample data with different splits
+        sample_data = []
+        splits = ['train', 'val', 'test']
+        for i in range(15):  # 15 total samples
+            split = splits[i % 3]  # 5 samples each for train, val, test
+            sample = {
+                'filename': f'test_table_{i}.png',
+                'split': split,
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            }
+            sample_data.append(sample)
+        
+        # Create temp file
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            # Test with split_filter='train' and max_data=3
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                split_filter='train',
+                max_data=3,
+                lazy_init=False
+            )
+            
+            assert len(dataset) == 3  # Should be limited to 3 from train split
+            
+            # Verify all samples are from train split
+            for i in range(len(dataset)):
+                data_info = dataset[i]
+                assert data_info['img_info']['split'] == 'train'
+                
+        finally:
+            # Cleanup
+            os.unlink(temp_file.name)
+
+    def test_max_data_zero_should_return_empty(self):
+        """Test that max_data=0 returns empty dataset."""
+        sample_data = [{
+            'filename': 'test_table.png',
+            'split': 'train',
+            'imgid': 12345,
+            'html': {
+                'structure': {'tokens': ['<table>', '</table>']},
+                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
+            }
+        }]
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_data, temp_file)
+        temp_file.close()
+        
+        try:
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                max_data=0,
+                lazy_init=True  # Use lazy_init to avoid serialization issues with empty dataset
+            )
+            
+            # Load data manually to test the max_data functionality
+            data_list = dataset.load_data_list()
+            assert len(data_list) == 0
+            
+        finally:
+            os.unlink(temp_file.name)
+
+    def test_repr_includes_max_data(self, temp_json_file):
+        """Test that __repr__ includes max_data parameter."""
+        dataset = PubTabNetDataset(
+            ann_file=temp_json_file,
+            max_data=100,
+            lazy_init=False
+        )
+        
+        repr_str = repr(dataset)
+        assert 'max_data=100' in repr_str
+        assert 'PubTabNetDataset' in repr_str
