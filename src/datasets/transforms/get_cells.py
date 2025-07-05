@@ -9,7 +9,7 @@ from mmengine.registry import TRANSFORMS
 
 
 @TRANSFORMS.register_module()
-class GetCell(BaseTransform):
+class GetCells(BaseTransform):
     """Transform để cắt các cell từ ảnh bảng dựa vào bbox của từng cell.
     
     Cắt từng cell từ ảnh bảng dựa vào bbox, trả về list ảnh cell tương ứng.

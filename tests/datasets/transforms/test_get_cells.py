@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from PIL import Image
 
-from datasets.transforms.get_cells import GetCell
+from datasets.transforms.get_cells import GetCells
 
 
 # Test fixtures
@@ -64,14 +64,14 @@ def sample_results(sample_img, sample_instances):
 ])
 def test_init_params(params, expected):
     """Test initialization with various parameters."""
-    transform = GetCell(**params)
+    transform = GetCells(**params)
     for key, value in expected.items():
         assert getattr(transform, key) == value
 
 
 def test_basic_cell_extraction(sample_results):
     """Test basic cell extraction functionality."""
-    transform = GetCell()
+    transform = GetCells()
     results = transform(sample_results.copy())
     
     # Should extract 2 valid cells (filtering out small cell, missing bbox, and structure task)
@@ -96,7 +96,7 @@ def test_basic_cell_extraction(sample_results):
 
 def test_no_task_filter(sample_results):
     """Test with no task filtering."""
-    transform = GetCell(task_filter=None)
+    transform = GetCells(task_filter=None)
     results = transform(sample_results.copy())
     
     # Should extract 3 cells (including structure task, but still filtering small/missing bbox)
@@ -114,7 +114,7 @@ def test_pil_image_input(sample_instances):
         'instances': sample_instances
     }
     
-    transform = GetCell()
+    transform = GetCells()
     results = transform(results)
     
     assert len(results['cell_imgs']) == 2
@@ -152,7 +152,7 @@ def test_bbox_validation_and_clipping(sample_img, test_instances, expected_count
         'instances': test_instances
     }
     
-    transform = GetCell()
+    transform = GetCells()
     results = transform(results)
     
     # Should handle all cases appropriately
@@ -199,7 +199,7 @@ def test_invalid_bbox_formats(sample_img, invalid_instances):
         'instances': invalid_instances
     }
     
-    transform = GetCell()
+    transform = GetCells()
     results = transform(results)
     
     # Should extract no cells due to invalid bboxes
@@ -233,7 +233,7 @@ def test_min_cell_size_filtering(sample_img, min_cell_size, expected_count):
         'instances': small_instances
     }
     
-    transform = GetCell(min_cell_size=min_cell_size)
+    transform = GetCells(min_cell_size=min_cell_size)
     results = transform(results)
     assert len(results['cell_imgs']) == expected_count
 
@@ -251,7 +251,7 @@ def test_empty_or_missing_instances(sample_img, test_input, expected_count):
     else:
         results = {'img': sample_img, 'instances': test_input}
     
-    transform = GetCell()
+    transform = GetCells()
     results = transform(results)
     
     assert len(results['cell_imgs']) == expected_count
@@ -266,7 +266,7 @@ def test_grayscale_image(sample_instances):
         'instances': sample_instances[:2]  # First 2 valid instances
     }
     
-    transform = GetCell()
+    transform = GetCells()
     results = transform(results)
     
     assert len(results['cell_imgs']) == 2
@@ -277,7 +277,7 @@ def test_grayscale_image(sample_instances):
 
 def test_cell_image_copy(sample_results):
     """Test that cell images are properly copied."""
-    transform = GetCell()
+    transform = GetCells()
     results = transform(sample_results.copy())
     
     # Modify original image
@@ -300,7 +300,7 @@ def test_cell_image_copy(sample_results):
 ])
 def test_repr(params, expected_repr_parts):
     """Test string representation."""
-    transform = GetCell(**params)
+    transform = GetCells(**params)
     repr_str = repr(transform)
     
     for part in expected_repr_parts:
@@ -317,7 +317,7 @@ def test_invalid_image_shape(sample_instances, invalid_img):
         'instances': sample_instances
     }
     
-    transform = GetCell()
+    transform = GetCells()
     
     with pytest.raises(ValueError, match="Invalid image shape"):
         transform(results)
