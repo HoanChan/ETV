@@ -191,8 +191,7 @@ class PubTabNetDataset(BaseDataset):
                 structure_instance = {
                     'text': structure_text
                 }
-                if self.task_type == 'both':
-                    structure_instance['task_type'] = 'structure'
+                structure_instance['task_type'] = 'structure'
                 instances.append(structure_instance)
             
             if self.task_type in ['content', 'both']:
@@ -213,8 +212,7 @@ class PubTabNetDataset(BaseDataset):
                         'text': cell_text,
                         'cell_id': idx
                     }
-                    if self.task_type == 'both':
-                        cell_instance['task_type'] = 'content'
+                    cell_instance['task_type'] = 'content'
                     
                     if len(cell_bbox) != 4: continue # Ensure bbox is valid
 
