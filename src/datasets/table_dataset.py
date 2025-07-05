@@ -186,10 +186,9 @@ class PubTabNetDataset(BaseDataset):
                 # Structure recognition instance
                 structure_data = html_data.get('structure', {})
                 structure_tokens = structure_data.get('tokens', [])
-                structure_text = ''.join(structure_tokens[:self.max_structure_len])
                 
                 structure_instance = {
-                    'text': structure_text
+                    'tokens': structure_tokens[:self.max_structure_len]
                 }
                 structure_instance['task_type'] = 'structure'
                 instances.append(structure_instance)
@@ -206,10 +205,8 @@ class PubTabNetDataset(BaseDataset):
                     if not cell_tokens and self.ignore_empty_cells:
                         continue
                     
-                    cell_text = ''.join(cell_tokens[:self.max_cell_len]) if cell_tokens else ''
-                    
                     cell_instance = {
-                        'text': cell_text,
+                        'tokens': cell_tokens[:self.max_cell_len],  # Truncate to max length
                         'cell_id': idx
                     }
                     cell_instance['task_type'] = 'content'

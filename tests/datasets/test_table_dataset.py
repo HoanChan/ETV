@@ -25,7 +25,7 @@ class TestPubTabNetDataset:
                 'structure': {
                     'tokens': ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
                 },
-                'cell': [
+                'cells': [
                     {
                         'tokens': ['Cell', 'Content', '1'],
                         'bbox': [10, 20, 100, 50]
@@ -149,11 +149,11 @@ class TestPubTabNetDataset:
         
         structure_instance = instances[0]
         assert structure_instance['task_type'] == 'structure'
-        assert 'text' in structure_instance
+        assert 'tokens' in structure_instance
         
-        # Check structure text
-        expected_structure = '<table> <tr> <td> </td> <td> </td> </tr> </table>'
-        assert structure_instance['text'] == expected_structure
+        # Check structure tokens
+        expected_structure = ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
+        assert structure_instance['tokens'] == expected_structure
     
     def test_parse_data_info_content_only(self, sample_annotation):
         """Test parsing data info for content recognition only."""
@@ -176,14 +176,14 @@ class TestPubTabNetDataset:
         # Check first cell instance
         cell1_instance = instances[0]
         assert cell1_instance['task_type'] == 'content'
-        assert cell1_instance['text'] == 'Cell Content 1'
+        assert cell1_instance['tokens'] == ['Cell', 'Content', '1']
         assert cell1_instance['cell_id'] == 0
         assert cell1_instance['bbox'] == [10, 20, 100, 50]
         
         # Check second cell instance
         cell2_instance = instances[1]
         assert cell2_instance['task_type'] == 'content'
-        assert cell2_instance['text'] == 'Cell Content 2'
+        assert cell2_instance['tokens'] == ['Cell', 'Content', '2']
         assert cell2_instance['cell_id'] == 1
         assert cell2_instance['bbox'] == [110, 20, 200, 50]
     
@@ -208,19 +208,19 @@ class TestPubTabNetDataset:
         # Check structure instance
         structure_instance = instances[0]
         assert structure_instance['task_type'] == 'structure'
-        assert 'text' in structure_instance
+        assert 'tokens' in structure_instance
         
         # Check content instances
         content_instances = [inst for inst in instances if inst['task_type'] == 'content']
         assert len(content_instances) == 2
         
-        assert content_instances[0]['text'] == 'Cell Content 1'
-        assert content_instances[1]['text'] == 'Cell Content 2'
+        assert content_instances[0]['tokens'] == ['Cell', 'Content', '1']
+        assert content_instances[1]['tokens'] == ['Cell', 'Content', '2']
     
     def test_parse_data_info_with_empty_cells(self, sample_annotation):
         """Test parsing data info with empty cells."""
         # Modify sample to have empty cells
-        sample_annotation['html']['cell'].append({
+        sample_annotation['html']['cells'].append({
             'tokens': []  # Empty cell without bbox
         })
         
@@ -328,12 +328,12 @@ class TestPubTabNetDataset:
         assert isinstance(instances, list)
         
         for instance in instances:
-            assert 'text' in instance
+            assert 'tokens' in instance
             assert 'task_type' in instance
             assert instance['task_type'] in ['structure', 'content']
     
-    def test_structure_tokens_joining(self, sample_annotation):
-        """Test that structure tokens are properly joined."""
+    def test_structure_tokens_format(self, sample_annotation):
+        """Test that structure tokens are properly stored."""
         dataset = PubTabNetDataset(
             ann_file='dummy.json',
             lazy_init=True,
@@ -341,16 +341,16 @@ class TestPubTabNetDataset:
         )
         
         tokens = sample_annotation['html']['structure']['tokens']
-        expected = ' '.join(tokens)
+        expected = tokens[:dataset.max_structure_len]  # Apply max length limit
         
         data_info = dataset.parse_data_info(sample_annotation)
         instances = data_info['instances']
         structure_instance = instances[0]
         
-        assert structure_instance['text'] == expected
+        assert structure_instance['tokens'] == expected
     
-    def test_cell_tokens_joining(self, sample_annotation):
-        """Test that cell tokens are properly joined."""
+    def test_cell_tokens_format(self, sample_annotation):
+        """Test that cell tokens are properly stored."""
         dataset = PubTabNetDataset(
             ann_file='dummy.json',
             lazy_init=True,
@@ -361,11 +361,11 @@ class TestPubTabNetDataset:
         instances = data_info['instances']
         
         # Check first cell tokens
-        cell1_tokens = sample_annotation['html']['cell'][0]['tokens']
-        expected_cell1 = ' '.join(cell1_tokens)
-        assert instances[0]['text'] == expected_cell1
+        cell1_tokens = sample_annotation['html']['cells'][0]['tokens']
+        expected_cell1 = cell1_tokens[:dataset.max_cell_len]  # Apply max length limit
+        assert instances[0]['tokens'] == expected_cell1
         
         # Check second cell tokens
-        cell2_tokens = sample_annotation['html']['cell'][1]['tokens']
-        expected_cell2 = ' '.join(cell2_tokens)
-        assert instances[1]['text'] == expected_cell2
+        cell2_tokens = sample_annotation['html']['cells'][1]['tokens']
+        expected_cell2 = cell2_tokens[:dataset.max_cell_len]  # Apply max length limit
+        assert instances[1]['tokens'] == expected_cell2

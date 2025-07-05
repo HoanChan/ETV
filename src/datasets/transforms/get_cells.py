@@ -3,7 +3,8 @@ import numpy as np
 from PIL import Image
 from mmcv.transforms.base import BaseTransform
 
-from mmocr.registry import TRANSFORMS
+# from mmocr.registry import TRANSFORMS
+from mmengine.registry import TRANSFORMS
 
 
 @TRANSFORMS.register_module()
@@ -15,14 +16,14 @@ class GetCell(BaseTransform):
     
     Required Keys:
         - img (ndarray): Ảnh gốc
-        - instances (list[dict]): List các instance chứa bbox và text
-    
+        - instances (list[dict]): List các instance chứa bbox và tokens
+
     Modified Keys:
         - None
         
     Added Keys:
         - cell_imgs (list[ndarray]): List các ảnh cell đã cắt
-        - cell_texts (list[str]): List ground truth text tương ứng
+        - cell_tokens (list[str]): List ground truth tokens tương ứng
         - cell_bboxes (list[list]): List bbox đã sử dụng
     
     Args:
@@ -65,7 +66,7 @@ class GetCell(BaseTransform):
         img_h, img_w = img.shape[:2]
         
         cell_imgs = []
-        cell_texts = []
+        cell_tokens = []
         cell_bboxes = []
         
         instances = results.get(self.instances_key, [])
@@ -77,10 +78,10 @@ class GetCell(BaseTransform):
                     continue
                     
             bbox = inst.get('bbox', None)
-            text = inst.get('text', None)
+            tokens = inst.get('tokens', None)
             
             # Skip if missing required fields
-            if bbox is None or text is None:
+            if bbox is None or tokens is None:
                 continue
                 
             # Validate bbox format
@@ -120,12 +121,12 @@ class GetCell(BaseTransform):
             cell_img = img[y0:y1, x0:x1].copy()
             
             cell_imgs.append(cell_img)
-            cell_texts.append(text)
+            cell_tokens.append(tokens)
             cell_bboxes.append([x0, y0, x1, y1])
         
         # Add results
         results['cell_imgs'] = cell_imgs
-        results['cell_texts'] = cell_texts
+        results['cell_tokens'] = cell_tokens
         results['cell_bboxes'] = cell_bboxes
         
         return results
