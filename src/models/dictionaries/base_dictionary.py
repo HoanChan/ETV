@@ -1,4 +1,4 @@
-# Copyright (c) OpenMMLab. All rights reserved.
+# Copyright (c) Lê Hoàn Chân. All rights reserved.
 from typing import List, Sequence
 
 from mmocr.registry import TASK_UTILS

@@ -1,4 +1,4 @@
-# Copyright (c) OpenMMLab. All rights reserved.
+# Copyright (c) Lê Hoàn Chân. All rights reserved.
 from typing import Dict, Optional, Sequence
 from mmengine.evaluator import BaseMetric
 

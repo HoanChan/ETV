@@ -1,3 +1,4 @@
+# Copyright (c) Lê Hoàn Chân. All rights reserved.
 from typing import Dict, List, Optional
 import numpy as np
 from PIL import Image
