@@ -2,6 +2,8 @@
 
 ETV (End-to-End Table Vision) là dự án Deep Learning giúp chuyển đổi bảng từ giấy (hình ảnh, scan) sang định dạng Excel hoặc HTML một cách tự động.
 
+Mô hình tham khảo từ [TableMASTER-mmocr](https://github.com/JiaquanYe/TableMASTER-mmocr/tree/master)
+
 ## 🎯 Mục tiêu
 
 - 📄 Nhận diện và trích xuất bảng từ hình ảnh tài liệu, hóa đơn, biểu mẫu, v.v.
