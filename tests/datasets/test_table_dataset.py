@@ -38,6 +38,31 @@ class TestPubTabNetDataset:
         }
     
     @pytest.fixture
+    def sample_annotations_multi(self):
+        """Create multiple sample annotations for testing."""
+        annotations = []
+        splits = ['train', 'val', 'test']
+        for i in range(15):
+            split = splits[i % 3]
+            annotations.append({
+                'filename': f'test_table_{i:02d}.png',
+                'split': split,
+                'imgid': 12345 + i,
+                'html': {
+                    'structure': {
+                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
+                    },
+                    'cells': [
+                        {
+                            'tokens': [f'Cell_{i}'],
+                            'bbox': [10, 20, 100, 50]
+                        }
+                    ]
+                }
+            })
+        return annotations
+    
+    @pytest.fixture
     def temp_json_file(self, sample_annotation):
         """Create a temporary JSON file with sample data."""
         temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
@@ -50,16 +75,10 @@ class TestPubTabNetDataset:
         os.unlink(temp_file.name)
     
     @pytest.fixture
-    def temp_jsonl_file(self, sample_annotation):
-        """Create a temporary JSONL file with sample data."""
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl')
-        json.dump(sample_annotation, temp_file)
-        temp_file.write('\n')
-        # Add another sample
-        sample2 = sample_annotation.copy()
-        sample2['filename'] = 'test_table2.png'
-        sample2['imgid'] = 12346
-        json.dump(sample2, temp_file)
+    def temp_multi_file(self, sample_annotations_multi):
+        """Create a temporary file with multiple samples."""
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+        json.dump(sample_annotations_multi, temp_file)
         temp_file.close()
         
         yield temp_file.name
@@ -67,48 +86,44 @@ class TestPubTabNetDataset:
         # Cleanup
         os.unlink(temp_file.name)
     
-    @pytest.fixture
-    def temp_bz2_file(self, sample_annotation):
-        """Create a temporary BZ2 compressed JSON file."""
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.json.bz2')
-        data = json.dumps([sample_annotation]).encode('utf-8')
-        temp_file.write(bz2.compress(data))
-        temp_file.close()
+    @pytest.mark.parametrize("file_type,suffix", [
+        ('json', '.json'),
+        ('jsonl', '.jsonl'),
+        ('bz2', '.json.bz2')
+    ])
+    def test_init_with_different_file_formats(self, sample_annotation, file_type, suffix):
+        """Test dataset initialization with different file formats."""
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=suffix)
         
-        yield temp_file.name
+        if file_type == 'json':
+            json.dump([sample_annotation], temp_file)
+        elif file_type == 'jsonl':
+            json.dump(sample_annotation, temp_file)
+            temp_file.write('\n')
+            sample2 = sample_annotation.copy()
+            sample2['filename'] = 'test_table2.png'
+            json.dump(sample2, temp_file)
+        elif file_type == 'bz2':
+            temp_file.close()
+            with open(temp_file.name, 'wb') as f:
+                data = json.dumps([sample_annotation]).encode('utf-8')
+                f.write(bz2.compress(data))
         
-        # Cleanup
-        os.unlink(temp_file.name)
-    
-    def test_init_with_json_file(self, temp_json_file):
-        """Test dataset initialization with JSON file."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
-            data_root='/tmp/test_data',
-            lazy_init=True
-        )
+        if file_type != 'bz2':
+            temp_file.close()
         
-        assert dataset.ann_file == temp_json_file
-        assert dataset.data_root == '/tmp/test_data'
-        assert dataset.task_type == 'both'
-    
-    def test_init_with_jsonl_file(self, temp_jsonl_file):
-        """Test dataset initialization with JSONL file."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_jsonl_file,
-            lazy_init=True
-        )
-        
-        assert dataset.ann_file == temp_jsonl_file
-    
-    def test_init_with_bz2_file(self, temp_bz2_file):
-        """Test dataset initialization with BZ2 compressed file."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_bz2_file,
-            lazy_init=True
-        )
-        
-        assert dataset.ann_file == temp_bz2_file
+        try:
+            dataset = PubTabNetDataset(
+                ann_file=temp_file.name,
+                data_root='/tmp/test_data',
+                lazy_init=True
+            )
+            
+            assert dataset.ann_file == temp_file.name
+            assert dataset.task_type == 'both'
+            
+        finally:
+            os.unlink(temp_file.name)
     
     @patch('mmengine.fileio.get_local_path')
     @patch('builtins.open', new_callable=mock_open)
@@ -128,93 +143,45 @@ class TestPubTabNetDataset:
             assert data_list[0]['filename'] == 'test_table.png'
             assert data_list[0]['imgid'] == 12345
     
-    def test_parse_data_info_structure_only(self, sample_annotation):
-        """Test parsing data info for structure recognition only."""
+    @pytest.mark.parametrize("task_type,expected_instances", [
+        ('structure', 1),  # Only structure instance
+        ('content', 2),    # Two cell instances  
+        ('both', 3)        # 1 structure + 2 content instances
+    ])
+    def test_parse_data_info_by_task_type(self, sample_annotation, task_type, expected_instances):
+        """Test parsing data info for different task types."""
         dataset = PubTabNetDataset(
             ann_file='dummy.json',
             lazy_init=True,
-            task_type='structure'
+            task_type=task_type
         )
         
         data_info = dataset.parse_data_info(sample_annotation)
         
+        # Check basic structure
         assert 'img_path' in data_info
         assert 'instances' in data_info
         assert 'img_info' in data_info
         
-        # Check instances format (mmOCR 1.x)
+        # Check instances count
         instances = data_info['instances']
-        assert len(instances) == 1  # Only structure instance
+        assert len(instances) == expected_instances
         
-        structure_instance = instances[0]
-        assert structure_instance['task_type'] == 'structure'
-        assert 'tokens' in structure_instance
-        
-        # Check structure tokens
-        expected_structure = ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
-        assert structure_instance['tokens'] == expected_structure
-    
-    def test_parse_data_info_content_only(self, sample_annotation):
-        """Test parsing data info for content recognition only."""
-        dataset = PubTabNetDataset(
-            ann_file='dummy.json',
-            lazy_init=True,
-            task_type='content'
-        )
-        
-        data_info = dataset.parse_data_info(sample_annotation)
-        
-        assert 'img_path' in data_info
-        assert 'instances' in data_info
-        assert 'img_info' in data_info
-        
-        # Check instances format (mmOCR 1.x)
-        instances = data_info['instances']
-        assert len(instances) == 2  # Two cell instances
-        
-        # Check first cell instance
-        cell1_instance = instances[0]
-        assert cell1_instance['task_type'] == 'content'
-        assert cell1_instance['tokens'] == ['Cell', 'Content', '1']
-        assert cell1_instance['cell_id'] == 0
-        assert cell1_instance['bbox'] == [10, 20, 100, 50]
-        
-        # Check second cell instance
-        cell2_instance = instances[1]
-        assert cell2_instance['task_type'] == 'content'
-        assert cell2_instance['tokens'] == ['Cell', 'Content', '2']
-        assert cell2_instance['cell_id'] == 1
-        assert cell2_instance['bbox'] == [110, 20, 200, 50]
-    
-    def test_parse_data_info_both_tasks(self, sample_annotation):
-        """Test parsing data info for both structure and content recognition."""
-        dataset = PubTabNetDataset(
-            ann_file='dummy.json',
-            lazy_init=True,
-            task_type='both'
-        )
-        
-        data_info = dataset.parse_data_info(sample_annotation)
-        
-        assert 'img_path' in data_info
-        assert 'instances' in data_info
-        assert 'img_info' in data_info
-        
-        # Check instances format (mmOCR 1.x)
-        instances = data_info['instances']
-        assert len(instances) == 3  # 1 structure + 2 content instances
-        
-        # Check structure instance
-        structure_instance = instances[0]
-        assert structure_instance['task_type'] == 'structure'
-        assert 'tokens' in structure_instance
-        
-        # Check content instances
-        content_instances = [inst for inst in instances if inst['task_type'] == 'content']
-        assert len(content_instances) == 2
-        
-        assert content_instances[0]['tokens'] == ['Cell', 'Content', '1']
-        assert content_instances[1]['tokens'] == ['Cell', 'Content', '2']
+        # Verify task types
+        if task_type == 'structure':
+            assert instances[0]['task_type'] == 'structure'
+            expected_structure = ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
+            assert instances[0]['tokens'] == expected_structure
+        elif task_type == 'content':
+            for i, instance in enumerate(instances):
+                assert instance['task_type'] == 'content'
+                assert instance['cell_id'] == i
+                assert 'bbox' in instance
+        elif task_type == 'both':
+            structure_instances = [inst for inst in instances if inst['task_type'] == 'structure']
+            content_instances = [inst for inst in instances if inst['task_type'] == 'content']
+            assert len(structure_instances) == 1
+            assert len(content_instances) == 2
     
     def test_parse_data_info_with_empty_cells(self, sample_annotation):
         """Test parsing data info with empty cells."""
@@ -241,36 +208,41 @@ class TestPubTabNetDataset:
         for instance in instances:
             assert instance['task_type'] == 'content'
     
-    def test_load_data_list_file_not_found(self):
-        """Test loading data list when file doesn't exist."""
-        dataset = PubTabNetDataset(
-            ann_file='nonexistent.json',
-            lazy_init=True
-        )
-        
-        with pytest.raises(FileNotFoundError):
-            dataset.load_data_list()
+    @pytest.mark.parametrize("scenario,expected_error", [
+        ('file_not_found', FileNotFoundError),
+        ('invalid_task_type', AssertionError)
+    ])
+    def test_error_cases(self, scenario, expected_error):
+        """Test various error cases."""
+        if scenario == 'file_not_found':
+            dataset = PubTabNetDataset(ann_file='nonexistent.json', lazy_init=True)
+            with pytest.raises(expected_error):
+                dataset.load_data_list()
+        elif scenario == 'invalid_task_type':
+            with pytest.raises(expected_error):
+                PubTabNetDataset(ann_file='dummy.json', lazy_init=True, task_type='invalid')
     
-    def test_parse_data_info_invalid_task_type(self, sample_annotation):
-        """Test parsing with invalid task type."""
-        with pytest.raises(AssertionError):
-            dataset = PubTabNetDataset(
-                ann_file='dummy.json',
-                lazy_init=True,
-                task_type='invalid'
-            )
-    
-    def test_get_data_info_with_indices(self, temp_json_file):
-        """Test getting data info with specific indices."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
-            indices=[0],
-            lazy_init=True
-        )
+    @pytest.mark.parametrize("config_param,config_value", [
+        ('indices', [0]),
+        ('data_prefix', {'img_path': 'images/'}),
+        ('test_mode', True)
+    ])
+    def test_dataset_configurations(self, temp_json_file, config_param, config_value):
+        """Test dataset with various configurations."""
+        kwargs = {
+            'ann_file': temp_json_file,
+            'lazy_init': True,
+            config_param: config_value
+        }
         
-        # The indices parameter is handled by BaseDataset
-        # We just check that the dataset was created successfully
-        assert dataset.task_type == 'both'
+        dataset = PubTabNetDataset(**kwargs)
+        
+        if config_param == 'indices':
+            assert dataset.task_type == 'both'  # Basic check
+        elif config_param == 'data_prefix':
+            assert dataset.data_prefix['img_path'] == 'images/'
+        elif config_param == 'test_mode':
+            assert dataset.test_mode is True
     
     def test_dataset_with_custom_data_prefix(self, temp_json_file):
         """Test dataset with custom data prefix."""
@@ -282,18 +254,8 @@ class TestPubTabNetDataset:
         
         assert dataset.data_prefix['img_path'] == 'images/'
     
-    def test_dataset_test_mode(self, temp_json_file):
-        """Test dataset in test mode."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
-            test_mode=True,
-            lazy_init=True
-        )
-        
-        assert dataset.test_mode is True
-    
-    def test_dataset_metainfo(self, temp_json_file):
-        """Test dataset metainfo compliance."""
+    def test_dataset_metainfo_and_format_compliance(self, temp_json_file, sample_annotation):
+        """Test dataset metainfo and format compliance."""
         dataset = PubTabNetDataset(
             ann_file=temp_json_file,
             lazy_init=True
@@ -305,15 +267,9 @@ class TestPubTabNetDataset:
         assert 'task_name' in dataset.METAINFO
         assert dataset.METAINFO['dataset_name'] == 'PubTabNet'
         assert dataset.METAINFO['task_name'] == 'table_recognition'
-    
-    def test_instances_format_compliance(self, sample_annotation):
-        """Test that instances format follows mmOCR 1.x standards."""
-        dataset = PubTabNetDataset(
-            ann_file='dummy.json',
-            lazy_init=True,
-            task_type='both'
-        )
         
+        # Test instances format compliance
+        dataset.task_type = 'both'
         data_info = dataset.parse_data_info(sample_annotation)
         
         # Check main format
@@ -331,559 +287,155 @@ class TestPubTabNetDataset:
             assert 'task_type' in instance
             assert instance['task_type'] in ['structure', 'content']
     
-    def test_structure_tokens_format(self, sample_annotation):
-        """Test that structure tokens are properly stored."""
+    @pytest.mark.parametrize("token_type,task_type", [
+        ('structure', 'structure'),
+        ('cell', 'content')
+    ])
+    def test_tokens_format_compliance(self, sample_annotation, token_type, task_type):
+        """Test that tokens are properly stored with length limits."""
         dataset = PubTabNetDataset(
             ann_file='dummy.json',
             lazy_init=True,
-            task_type='structure'
+            task_type=task_type
         )
-        
-        tokens = sample_annotation['html']['structure']['tokens']
-        expected = tokens[:dataset.max_structure_len]  # Apply max length limit
         
         data_info = dataset.parse_data_info(sample_annotation)
         instances = data_info['instances']
-        structure_instance = instances[0]
         
-        assert structure_instance['tokens'] == expected
+        if token_type == 'structure':
+            tokens = sample_annotation['html']['structure']['tokens']
+            expected = tokens[:dataset.max_structure_len]
+            assert instances[0]['tokens'] == expected
+        elif token_type == 'cell':
+            # Check first cell
+            cell1_tokens = sample_annotation['html']['cells'][0]['tokens']
+            expected_cell1 = cell1_tokens[:dataset.max_cell_len]
+            assert instances[0]['tokens'] == expected_cell1
     
-    def test_cell_tokens_format(self, sample_annotation):
-        """Test that cell tokens are properly stored."""
-        dataset = PubTabNetDataset(
-            ann_file='dummy.json',
-            lazy_init=True,
-            task_type='content'
-        )
-        
-        data_info = dataset.parse_data_info(sample_annotation)
-        instances = data_info['instances']
-        
-        # Check first cell tokens
-        cell1_tokens = sample_annotation['html']['cells'][0]['tokens']
-        expected_cell1 = cell1_tokens[:dataset.max_cell_len]  # Apply max length limit
-        assert instances[0]['tokens'] == expected_cell1
-        
-        # Check second cell tokens
-        cell2_tokens = sample_annotation['html']['cells'][1]['tokens']
-        expected_cell2 = cell2_tokens[:dataset.max_cell_len]  # Apply max length limit
-        assert instances[1]['tokens'] == expected_cell2
-
-    def test_max_data_default(self, temp_json_file):
-        """Test that max_data=-1 loads all data by default."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
-            lazy_init=False
-        )
-        
-        # Should load all data when max_data=-1 (default)
-        assert dataset.max_data == -1
-        assert len(dataset) == 1  # Sample file has 1 item
-
-    def test_max_data_limit(self):
-        """Test that max_data limits the number of loaded samples."""
-        # Create sample data with multiple items
-        sample_data = []
-        for i in range(10):
-            sample = {
-                'filename': f'test_table_{i}.png',
-                'split': 'train',
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        # Create temp file with multiple samples
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test with max_data=5
+    @pytest.mark.parametrize("max_data,random_sample,expected_behavior", [
+        (-1, False, 'load_all'),           # Default behavior
+        (0, False, 'empty'),               # Empty dataset
+        (5, False, 'sequential_5'),        # First 5 samples
+        (3, False, 'sequential_3'),        # First 3 samples
+        (20, False, 'all_available'),      # More than available
+        (5, True, 'random_5'),             # Random 5 samples
+        (3, True, 'random_3'),             # Random 3 samples
+    ])
+    def test_max_data_and_random_sample(self, temp_multi_file, max_data, random_sample, expected_behavior):
+        """Test max_data and random_sample functionality comprehensively."""
+        if expected_behavior == 'load_all':
             dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
+                ann_file=temp_multi_file,
                 lazy_init=False
             )
+            assert dataset.max_data == -1
+            assert len(dataset) == 15  # All samples
             
-            assert dataset.max_data == 5
-            assert len(dataset) == 5  # Should be limited to 5
-            
-            # Test with max_data=3
+        elif expected_behavior == 'empty':
             dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=3,
-                lazy_init=False
+                ann_file=temp_multi_file,
+                max_data=max_data,
+                lazy_init=True
             )
-            
-            assert len(dataset) == 3  # Should be limited to 3
-            
-            # Test with max_data larger than available data
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=20,
-                lazy_init=False
-            )
-            
-            assert len(dataset) == 10  # Should return all available data (10)
-            
-        finally:
-            # Cleanup
-            os.unlink(temp_file.name)
-
-    def test_max_data_with_split_filter(self):
-        """Test max_data works correctly with split_filter."""
-        # Create sample data with different splits
-        sample_data = []
-        splits = ['train', 'val', 'test']
-        for i in range(15):  # 15 total samples
-            split = splits[i % 3]  # 5 samples each for train, val, test
-            sample = {
-                'filename': f'test_table_{i}.png',
-                'split': split,
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        # Create temp file
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test with split_filter='train' and max_data=3
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                split_filter='train',
-                max_data=3,
-                lazy_init=False
-            )
-            
-            assert len(dataset) == 3  # Should be limited to 3 from train split
-            
-            # Verify all samples are from train split
-            for i in range(len(dataset)):
-                data_info = dataset[i]
-                assert data_info['img_info']['split'] == 'train'
-                
-        finally:
-            # Cleanup
-            os.unlink(temp_file.name)
-
-    def test_max_data_zero_should_return_empty(self):
-        """Test that max_data=0 returns empty dataset."""
-        sample_data = [{
-            'filename': 'test_table.png',
-            'split': 'train',
-            'imgid': 12345,
-            'html': {
-                'structure': {'tokens': ['<table>', '</table>']},
-                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
-            }
-        }]
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=0,
-                lazy_init=True  # Use lazy_init to avoid serialization issues with empty dataset
-            )
-            
-            # Load data manually to test the max_data functionality
             data_list = dataset.load_data_list()
             assert len(data_list) == 0
             
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_repr_includes_max_data(self, temp_json_file):
-        """Test that __repr__ includes max_data parameter."""
-        dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
-            max_data=100,
-            lazy_init=False
-        )
-        
-        repr_str = repr(dataset)
-        assert 'max_data=100' in repr_str
-        assert 'PubTabNetDataset' in repr_str
-    
-    def test_random_sample_default(self):
-        """Test that random_sample=False by default takes first N samples."""
-        # Create sample data with multiple items
-        sample_data = []
-        for i in range(10):
-            sample = {
-                'filename': f'test_table_{i}.png',
-                'split': 'train',
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        # Create temp file with multiple samples
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test with max_data=5, random_sample=False (default)
+        elif expected_behavior in ['sequential_5', 'sequential_3']:
+            expected_count = int(expected_behavior.split('_')[1])
             dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
+                ann_file=temp_multi_file,
+                max_data=max_data,
                 random_sample=False,
                 lazy_init=True
             )
-            
             data_list = dataset.load_data_list()
-            assert len(data_list) == 5
+            assert len(data_list) == expected_count
             
-            # Should get first 5 samples in order
-            expected_filenames = [f'test_table_{i}.png' for i in range(5)]
-            actual_filenames = [os.path.basename(data['img_path']) for data in data_list]
-            assert actual_filenames == expected_filenames
+            # Check sequential order
+            filenames = [os.path.basename(data['img_path']) for data in data_list]
+            expected_filenames = [f'test_table_{i:02d}.png' for i in range(expected_count)]
+            assert filenames == expected_filenames
             
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_random_sample_enabled(self):
-        """Test that random_sample=True randomly samples N samples."""
-        # Create sample data with multiple items
-        sample_data = []
-        for i in range(20):
-            sample = {
-                'filename': f'test_table_{i:02d}.png',  # Use zero-padded format for consistent sorting
-                'split': 'train',
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        # Create temp file with multiple samples
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Set random seed for reproducible test
-            random.seed(42)
-            
-            # Test with max_data=5, random_sample=True
+        elif expected_behavior == 'all_available':
             dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list1 = dataset.load_data_list()
-            assert len(data_list1) == 5
-            
-            # Reset seed and create another dataset
-            random.seed(42)
-            dataset2 = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list2 = dataset2.load_data_list()
-            
-            # Should get same random samples with same seed
-            filenames1 = [os.path.basename(data['img_path']) for data in data_list1]
-            filenames2 = [os.path.basename(data['img_path']) for data in data_list2]
-            assert filenames1 == filenames2
-            
-            # Reset seed with different value to get different samples
-            random.seed(123)
-            dataset3 = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list3 = dataset3.load_data_list()
-            filenames3 = [os.path.basename(data['img_path']) for data in data_list3]
-            
-            # With high probability, different seed should give different samples
-            # (though theoretically they could be the same by chance)
-            assert len(set(filenames1 + filenames3)) > 5  # Should have more than 5 unique filenames total
-            
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_random_sample_with_small_dataset(self):
-        """Test random_sample behavior when max_data >= available data."""
-        # Create sample data with 3 items
-        sample_data = []
-        for i in range(3):
-            sample = {
-                'filename': f'test_table_{i}.png',
-                'split': 'train',
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test with max_data=5 (more than available), random_sample=True
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list = dataset.load_data_list()
-            assert len(data_list) == 3  # Should return all available data
-            
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_random_sample_with_max_data_zero(self):
-        """Test random_sample behavior with max_data=0."""
-        sample_data = [{
-            'filename': 'test_table.png',
-            'split': 'train',
-            'imgid': 12345,
-            'html': {
-                'structure': {'tokens': ['<table>', '</table>']},
-                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
-            }
-        }]
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=0,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list = dataset.load_data_list()
-            assert len(data_list) == 0
-            
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_random_sample_with_split_filter(self):
-        """Test random_sample works correctly with split_filter."""
-        # Create sample data with different splits
-        sample_data = []
-        for i in range(12):  # 12 total samples
-            split = 'train' if i < 8 else 'val'  # 8 train, 4 val
-            sample = {
-                'filename': f'test_table_{i:02d}.png',
-                'split': split,
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test with split_filter='train', max_data=5, random_sample=True
-            random.seed(42)
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                split_filter='train',
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list = dataset.load_data_list()
-            assert len(data_list) == 5
-            
-            # Verify all samples are from train split
-            for data_info in data_list:
-                assert data_info['img_info']['split'] == 'train'
-                
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_repr_includes_random_sample(self):
-        """Test that __repr__ includes random_sample parameter."""
-        # Create a simple temp file
-        sample_data = [{
-            'filename': 'test_table.png',
-            'split': 'train',
-            'imgid': 12345,
-            'html': {
-                'structure': {'tokens': ['<table>', '</table>']},
-                'cells': [{'tokens': ['Cell'], 'bbox': [10, 20, 100, 50]}]
-            }
-        }]
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                random_sample=True,
+                ann_file=temp_multi_file,
+                max_data=max_data,
                 lazy_init=False
             )
+            assert len(dataset) == 15  # All available
             
-            repr_str = repr(dataset)
-            assert 'random_sample=True' in repr_str
-            assert 'PubTabNetDataset' in repr_str
-            
-        finally:
-            os.unlink(temp_file.name)
-
-    def test_max_data_and_random_sample_integration(self):
-        """Test max_data and random_sample work together correctly."""
-        # Create sample data with multiple items
-        sample_data = []
-        for i in range(15):
-            sample = {
-                'filename': f'test_table_{i:02d}.png',
-                'split': 'train',
-                'imgid': 12345 + i,
-                'html': {
-                    'structure': {
-                        'tokens': ['<table>', '<tr>', '<td>', '</td>', '</tr>', '</table>']
-                    },
-                    'cells': [
-                        {
-                            'tokens': [f'Cell_{i}'],
-                            'bbox': [10, 20, 100, 50]
-                        }
-                    ]
-                }
-            }
-            sample_data.append(sample)
-        
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_data, temp_file)
-        temp_file.close()
-        
-        try:
-            # Test 1: max_data + random_sample=False (sequential)
+        elif expected_behavior in ['random_5', 'random_3']:
+            expected_count = int(expected_behavior.split('_')[1])
+            random.seed(42)  # For reproducibility
             dataset1 = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=False,
+                ann_file=temp_multi_file,
+                max_data=max_data,
+                random_sample=True,
                 lazy_init=True
             )
-            
             data_list1 = dataset1.load_data_list()
-            filenames1 = [os.path.basename(data['img_path']) for data in data_list1]
-            expected_sequential = [f'test_table_{i:02d}.png' for i in range(5)]
-            assert filenames1 == expected_sequential
+            assert len(data_list1) == expected_count
             
-            # Test 2: max_data + random_sample=True (random)
+            # Test reproducibility
             random.seed(42)
             dataset2 = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
+                ann_file=temp_multi_file,
+                max_data=max_data,
                 random_sample=True,
                 lazy_init=True
             )
-            
             data_list2 = dataset2.load_data_list()
+            filenames1 = [os.path.basename(data['img_path']) for data in data_list1]
             filenames2 = [os.path.basename(data['img_path']) for data in data_list2]
-            
-            # Should get exactly 5 samples
-            assert len(filenames2) == 5
-            # Should be different from sequential (with high probability)
-            assert filenames1 != filenames2
-            # All filenames should be from the original dataset
-            all_original_names = [f'test_table_{i:02d}.png' for i in range(15)]
-            assert all(name in all_original_names for name in filenames2)
-            
-            # Test 3: Reproducibility with same seed
-            random.seed(42)
-            dataset3 = PubTabNetDataset(
-                ann_file=temp_file.name,
-                max_data=5,
-                random_sample=True,
-                lazy_init=True
-            )
-            
-            data_list3 = dataset3.load_data_list()
-            filenames3 = [os.path.basename(data['img_path']) for data in data_list3]
-            assert filenames2 == filenames3  # Same seed should give same result
-            
-        finally:
-            os.unlink(temp_file.name)
+            assert filenames1 == filenames2  # Same seed should give same result
+    
+    def test_split_filter_with_max_data(self, temp_multi_file):
+        """Test split_filter works correctly with max_data and random_sample."""
+        # Test with split_filter='train' and max_data=3
+        dataset = PubTabNetDataset(
+            ann_file=temp_multi_file,
+            split_filter='train',
+            max_data=3,
+            lazy_init=False
+        )
+        
+        assert len(dataset) == 3  # Should be limited to 3 from train split
+        
+        # Verify all samples are from train split
+        for i in range(len(dataset)):
+            data_info = dataset[i]
+            assert data_info['img_info']['split'] == 'train'
+        
+        # Test with random sampling and split filter
+        random.seed(42)
+        dataset_random = PubTabNetDataset(
+            ann_file=temp_multi_file,
+            split_filter='train',
+            max_data=3,
+            random_sample=True,
+            lazy_init=True
+        )
+        
+        data_list = dataset_random.load_data_list()
+        assert len(data_list) == 3
+        
+        # Verify all samples are from train split
+        for data_info in data_list:
+            assert data_info['img_info']['split'] == 'train'
+    
+    @pytest.mark.parametrize("param_name,param_value,expected_in_repr", [
+        ('max_data', 100, 'max_data=100'),
+        ('random_sample', True, 'random_sample=True'),
+    ])
+    def test_repr_includes_parameters(self, temp_json_file, param_name, param_value, expected_in_repr):
+        """Test that __repr__ includes important parameters."""
+        kwargs = {
+            'ann_file': temp_json_file,
+            'lazy_init': False,
+            param_name: param_value
+        }
+        
+        dataset = PubTabNetDataset(**kwargs)
+        repr_str = repr(dataset)
+        assert expected_in_repr in repr_str
+        assert 'PubTabNetDataset' in repr_str
