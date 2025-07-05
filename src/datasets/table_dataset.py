@@ -33,10 +33,8 @@ class PubTabNetDataset(BaseDataset):
     }
 
     Supported file formats:
-        - .json: Standard JSON format
         - .jsonl: Line-by-line JSON format
-        - .json.bz2: JSON compressed with bz2
-        - .jsonl.bz2: JSONL compressed with bz2
+        - .bz2: JSONL compressed with bz2
 
     Args:
         task_type (str): Task type, can be 'structure', 'content', or 'both'.
@@ -56,6 +54,8 @@ class PubTabNetDataset(BaseDataset):
             Useful for debugging and testing. Defaults to -1.
         random_sample (bool): Whether to randomly sample max_data samples instead of 
             taking the first max_data samples. Only effective when max_data > 0.
+            If True, all data will be loaded into memory for random sampling.
+            If False, only reads up to max_data samples (memory efficient).
             Defaults to False.
         **kwargs: Other arguments passed to BaseDataset.
     """
@@ -98,154 +98,86 @@ class PubTabNetDataset(BaseDataset):
     def load_data_list(self) -> List[Dict]:
         """Load data list from annotation file."""
         with get_local_path(self.ann_file) as local_path:
-            # Check if file is compressed with bz2
-            if local_path.endswith('.bz2'):
-                with bz2.open(local_path, 'rt', encoding='utf-8') as f:
-                    # All bz2 files are treated as JSONL format
-                    raw_data_list = [ujson.loads(line.strip()) for line in f if line.strip()]
-            else:
-                with open(local_path, 'r', encoding='utf-8') as f:
-                    if local_path.endswith('.jsonl'):
-                        # Line-by-line JSON format
-                        raw_data_list = [ujson.loads(line.strip()) for line in f if line.strip()]
-                    else:
-                        # Standard JSON format
-                        raw_data_list = ujson.load(f)
-
-        data_list = []
-        for raw_data_info in raw_data_list:
-            # Filter by split if specified
-            if self.split_filter is not None:
-                if raw_data_info.get('split') != self.split_filter:
-                    continue
+            if not (local_path.endswith('.jsonl') or local_path.endswith('.bz2')):
+                raise ValueError(f"Unsupported file format. Only .jsonl and .bz2 are supported, got {local_path}")
             
-            data_info = self.parse_data_info(raw_data_info)
-            if data_info is not None:
-                data_list.append(data_info)
-
-        # Limit data if max_data is specified and >= 0
-        if self.max_data >= 0:
-            if self.random_sample and self.max_data > 0 and len(data_list) > self.max_data:
-                # Randomly sample max_data samples
-                data_list = random.sample(data_list, self.max_data)
-            else:
-                # Take first max_data samples
-                data_list = data_list[:self.max_data]
-
-        return data_list
+            file_opener = bz2.open if local_path.endswith('.bz2') else open
+            data_list = []
+            
+            with file_opener(local_path, 'rt', encoding='utf-8') as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        raw_data_info = ujson.loads(line.strip())
+                        if self.split_filter and raw_data_info.get('split') != self.split_filter:
+                            continue
+                        data_info = self.parse_data_info(raw_data_info)
+                        if data_info:
+                            data_list.append(data_info)
+                            # Early exit for sequential reading when max_data is set and random_sample is False
+                            if self.max_data > 0 and not self.random_sample and len(data_list) >= self.max_data:
+                                break
+                    except:
+                        continue
+                
+                # Apply sampling/limiting
+                if self.max_data >= 0:
+                    if self.random_sample and len(data_list) > self.max_data:
+                        data_list = random.sample(data_list, self.max_data)
+                    else:
+                        data_list = data_list[:self.max_data]
+            
+            return data_list
 
     def parse_data_info(self, raw_data_info: Dict) -> Optional[Dict]:
-        """Parse raw data info to mmOCR format with 'instances' key.
-        https://mmocr.readthedocs.io/en/latest/basic_concepts/datasets.html
-        https://github.com/open-mmlab/mmengine/blob/main/mmengine/dataset/base_dataset.py
-        {
-            "metainfo":
-            {
-              "dataset_type": "test_dataset",
-              "task_name": "test_task"
-            },
-            "data_list":
-            [
-              {
-                "img_path": "test_img.jpg",
-                "height": 604,
-                "width": 640,
-                "instances":
-                [
-                  {
-                    "bbox": [0, 0, 10, 20],
-                    "bbox_label": 1,
-                    "mask": [[0,0],[0,10],[10,20],[20,0]],
-                    "extra_anns": [1,2,3]
-                  },
-                  {
-                    "bbox": [10, 10, 110, 120],
-                    "bbox_label": 2,
-                    "mask": [[10,10],[10,110],[110,120],[120,10]],
-                    "extra_anns": [4,5,6]
-                  }
-                ]
-              },
-            ]
-        }
-        
-        """
+        """Parse raw data info to mmOCR format with 'instances' key."""
         try:
-            data_info = {}
-            
-            # Basic image information (required by mmOCR)
-            data_info['img_path'] = os.path.join(
-                self.data_prefix.get('img_path', ''), 
-                raw_data_info['filename']
-            )
-            
-            # Add sample_idx for compatibility
-            data_info['sample_idx'] = raw_data_info.get('imgid', 0)
-            
-            # Parse HTML structure and content
             html_data = raw_data_info.get('html', {})
-            
-            # Create instances list (mmOCR 1.x format)
             instances = []
             
+            # Structure recognition
             if self.task_type in ['structure', 'both']:
-                # Structure recognition instance
-                structure_data = html_data.get('structure', {})
-                structure_tokens = structure_data.get('tokens', [])
-                
-                structure_instance = {
-                    'tokens': structure_tokens[:self.max_structure_len]
-                }
-                structure_instance['task_type'] = 'structure'
-                instances.append(structure_instance)
+                structure_tokens = html_data.get('structure', {}).get('tokens', [])
+                instances.append({
+                    'tokens': structure_tokens[:self.max_structure_len],
+                    'task_type': 'structure'
+                })
             
+            # Cell content recognition
             if self.task_type in ['content', 'both']:
-                # Cell content recognition instances
-                cells_data = html_data.get('cells', [])
-                
-                for idx, cell in enumerate(cells_data):
+                for idx, cell in enumerate(html_data.get('cells', [])):
                     cell_tokens = cell.get('tokens', [])
                     cell_bbox = cell.get('bbox', [])
                     
-                    # Skip empty cells if configured
                     if not cell_tokens and self.ignore_empty_cells:
                         continue
+                    if len(cell_bbox) != 4:
+                        continue
                     
-                    cell_instance = {
-                        'tokens': cell_tokens[:self.max_cell_len],  # Truncate to max length
-                        'cell_id': idx
-                    }
-                    cell_instance['task_type'] = 'content'
-                    
-                    if len(cell_bbox) != 4: continue # Ensure bbox is valid
-
-                    cell_instance['bbox'] = cell_bbox
-
-                    instances.append(cell_instance)
+                    instances.append({
+                        'tokens': cell_tokens[:self.max_cell_len],
+                        'cell_id': idx,
+                        'task_type': 'content',
+                        'bbox': cell_bbox
+                    })
             
-            # Store instances in the required format
-            data_info['instances'] = instances
-            
-            # Add metadata
-            data_info['img_info'] = {
-                'height': None,  # Will be set by pipeline
-                'width': None,   # Will be set by pipeline
-                'split': raw_data_info.get('split', 'train')
+            return {
+                'img_path': os.path.join(self.data_prefix.get('img_path', ''), raw_data_info['filename']),
+                'sample_idx': raw_data_info.get('imgid', 0),
+                'instances': instances,
+                'img_info': {
+                    'height': None,
+                    'width': None,
+                    'split': raw_data_info.get('split', 'train')
+                }
             }
-            
-            return data_info
-            
         except Exception as e:
             print(f"Error parsing data info for {raw_data_info.get('filename', 'unknown')}: {e}")
             return None
 
     def __repr__(self) -> str:
         """Print the basic information of the dataset."""
-        repr_str = (f'{self.__class__.__name__}('
-                   f'task_type={self.task_type}, '
-                   f'split_filter={self.split_filter}, '
-                   f'max_data={self.max_data}, '
-                   f'random_sample={self.random_sample}, '
-                   f'num_samples={len(self)}, '
-                   f'ann_file={self.ann_file})')
-        return repr_str
+        return (f'{self.__class__.__name__}(task_type={self.task_type}, '
+                f'split_filter={self.split_filter}, max_data={self.max_data}, '
+                f'random_sample={self.random_sample}, num_samples={len(self)})')

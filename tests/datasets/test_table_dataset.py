@@ -63,10 +63,11 @@ class TestPubTabNetDataset:
         return annotations
     
     @pytest.fixture
-    def temp_json_file(self, sample_annotation):
-        """Create a temporary JSON file with sample data."""
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump([sample_annotation], temp_file)
+    def temp_jsonl_file(self, sample_annotation):
+        """Create a temporary JSONL file with sample data."""
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl')
+        json.dump(sample_annotation, temp_file)
+        temp_file.write('\n')
         temp_file.close()
         
         yield temp_file.name
@@ -75,10 +76,12 @@ class TestPubTabNetDataset:
         os.unlink(temp_file.name)
     
     @pytest.fixture
-    def temp_multi_file(self, sample_annotations_multi):
-        """Create a temporary file with multiple samples."""
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-        json.dump(sample_annotations_multi, temp_file)
+    def temp_multi_jsonl_file(self, sample_annotations_multi):
+        """Create a temporary JSONL file with multiple samples."""
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl')
+        for annotation in sample_annotations_multi:
+            json.dump(annotation, temp_file)
+            temp_file.write('\n')
         temp_file.close()
         
         yield temp_file.name
@@ -87,30 +90,30 @@ class TestPubTabNetDataset:
         os.unlink(temp_file.name)
     
     @pytest.mark.parametrize("file_type,suffix", [
-        ('json', '.json'),
         ('jsonl', '.jsonl'),
-        ('bz2', '.json.bz2')
+        ('bz2', '.jsonl.bz2')
     ])
     def test_init_with_different_file_formats(self, sample_annotation, file_type, suffix):
         """Test dataset initialization with different file formats."""
         temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=suffix)
         
-        if file_type == 'json':
-            json.dump([sample_annotation], temp_file)
-        elif file_type == 'jsonl':
+        if file_type == 'jsonl':
             json.dump(sample_annotation, temp_file)
             temp_file.write('\n')
             sample2 = sample_annotation.copy()
             sample2['filename'] = 'test_table2.png'
             json.dump(sample2, temp_file)
+            temp_file.write('\n')
+            temp_file.close()
         elif file_type == 'bz2':
             temp_file.close()
-            with open(temp_file.name, 'wb') as f:
-                data = json.dumps([sample_annotation]).encode('utf-8')
-                f.write(bz2.compress(data))
-        
-        if file_type != 'bz2':
-            temp_file.close()
+            with bz2.open(temp_file.name, 'wt', encoding='utf-8') as f:
+                json.dump(sample_annotation, f)
+                f.write('\n')
+                sample2 = sample_annotation.copy()
+                sample2['filename'] = 'test_table2.png'
+                json.dump(sample2, f)
+                f.write('\n')
         
         try:
             dataset = PubTabNetDataset(
@@ -125,24 +128,7 @@ class TestPubTabNetDataset:
         finally:
             os.unlink(temp_file.name)
     
-    @patch('mmengine.fileio.get_local_path')
-    @patch('builtins.open', new_callable=mock_open)
-    def test_load_data_list_json(self, mock_file, mock_get_path, sample_annotation):
-        """Test loading data list from JSON file."""
-        mock_get_path.return_value = '/tmp/test.json'
-        mock_file.return_value.read.return_value = json.dumps([sample_annotation])
-        
-        dataset = PubTabNetDataset(ann_file='/tmp/test.json', lazy_init=True)
-        
-        # Mock the load_data_list method call
-        with patch.object(dataset, 'load_data_list') as mock_load:
-            mock_load.return_value = [sample_annotation]
-            data_list = dataset.load_data_list()
-            
-            assert len(data_list) == 1
-            assert data_list[0]['filename'] == 'test_table.png'
-            assert data_list[0]['imgid'] == 12345
-    
+
     @pytest.mark.parametrize("task_type,expected_instances", [
         ('structure', 1),  # Only structure instance
         ('content', 2),    # Two cell instances  
@@ -151,7 +137,7 @@ class TestPubTabNetDataset:
     def test_parse_data_info_by_task_type(self, sample_annotation, task_type, expected_instances):
         """Test parsing data info for different task types."""
         dataset = PubTabNetDataset(
-            ann_file='dummy.json',
+            ann_file='dummy.jsonl',
             lazy_init=True,
             task_type=task_type
         )
@@ -191,7 +177,7 @@ class TestPubTabNetDataset:
         })
         
         dataset = PubTabNetDataset(
-            ann_file='dummy.json',
+            ann_file='dummy.jsonl',
             lazy_init=True,
             task_type='content'
         )
@@ -215,22 +201,22 @@ class TestPubTabNetDataset:
     def test_error_cases(self, scenario, expected_error):
         """Test various error cases."""
         if scenario == 'file_not_found':
-            dataset = PubTabNetDataset(ann_file='nonexistent.json', lazy_init=True)
+            dataset = PubTabNetDataset(ann_file='nonexistent.jsonl', lazy_init=True)
             with pytest.raises(expected_error):
                 dataset.load_data_list()
         elif scenario == 'invalid_task_type':
             with pytest.raises(expected_error):
-                PubTabNetDataset(ann_file='dummy.json', lazy_init=True, task_type='invalid')
+                PubTabNetDataset(ann_file='dummy.jsonl', lazy_init=True, task_type='invalid')
     
     @pytest.mark.parametrize("config_param,config_value", [
         ('indices', [0]),
         ('data_prefix', {'img_path': 'images/'}),
         ('test_mode', True)
     ])
-    def test_dataset_configurations(self, temp_json_file, config_param, config_value):
+    def test_dataset_configurations(self, temp_jsonl_file, config_param, config_value):
         """Test dataset with various configurations."""
         kwargs = {
-            'ann_file': temp_json_file,
+            'ann_file': temp_jsonl_file,
             'lazy_init': True,
             config_param: config_value
         }
@@ -244,20 +230,20 @@ class TestPubTabNetDataset:
         elif config_param == 'test_mode':
             assert dataset.test_mode is True
     
-    def test_dataset_with_custom_data_prefix(self, temp_json_file):
+    def test_dataset_with_custom_data_prefix(self, temp_jsonl_file):
         """Test dataset with custom data prefix."""
         dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
+            ann_file=temp_jsonl_file,
             data_prefix=dict(img_path='images/'),
             lazy_init=True
         )
         
         assert dataset.data_prefix['img_path'] == 'images/'
     
-    def test_dataset_metainfo_and_format_compliance(self, temp_json_file, sample_annotation):
+    def test_dataset_metainfo_and_format_compliance(self, temp_jsonl_file, sample_annotation):
         """Test dataset metainfo and format compliance."""
         dataset = PubTabNetDataset(
-            ann_file=temp_json_file,
+            ann_file=temp_jsonl_file,
             lazy_init=True
         )
         
@@ -294,7 +280,7 @@ class TestPubTabNetDataset:
     def test_tokens_format_compliance(self, sample_annotation, token_type, task_type):
         """Test that tokens are properly stored with length limits."""
         dataset = PubTabNetDataset(
-            ann_file='dummy.json',
+            ann_file='dummy.jsonl',
             lazy_init=True,
             task_type=task_type
         )
@@ -321,11 +307,11 @@ class TestPubTabNetDataset:
         (5, True, 'random_5'),             # Random 5 samples
         (3, True, 'random_3'),             # Random 3 samples
     ])
-    def test_max_data_and_random_sample(self, temp_multi_file, max_data, random_sample, expected_behavior):
+    def test_max_data_and_random_sample(self, temp_multi_jsonl_file, max_data, random_sample, expected_behavior):
         """Test max_data and random_sample functionality comprehensively."""
         if expected_behavior == 'load_all':
             dataset = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 lazy_init=False
             )
             assert dataset.max_data == -1
@@ -333,7 +319,7 @@ class TestPubTabNetDataset:
             
         elif expected_behavior == 'empty':
             dataset = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 max_data=max_data,
                 lazy_init=True
             )
@@ -343,7 +329,7 @@ class TestPubTabNetDataset:
         elif expected_behavior in ['sequential_5', 'sequential_3']:
             expected_count = int(expected_behavior.split('_')[1])
             dataset = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 max_data=max_data,
                 random_sample=False,
                 lazy_init=True
@@ -358,7 +344,7 @@ class TestPubTabNetDataset:
             
         elif expected_behavior == 'all_available':
             dataset = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 max_data=max_data,
                 lazy_init=False
             )
@@ -368,7 +354,7 @@ class TestPubTabNetDataset:
             expected_count = int(expected_behavior.split('_')[1])
             random.seed(42)  # For reproducibility
             dataset1 = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 max_data=max_data,
                 random_sample=True,
                 lazy_init=True
@@ -379,7 +365,7 @@ class TestPubTabNetDataset:
             # Test reproducibility
             random.seed(42)
             dataset2 = PubTabNetDataset(
-                ann_file=temp_multi_file,
+                ann_file=temp_multi_jsonl_file,
                 max_data=max_data,
                 random_sample=True,
                 lazy_init=True
@@ -389,11 +375,11 @@ class TestPubTabNetDataset:
             filenames2 = [os.path.basename(data['img_path']) for data in data_list2]
             assert filenames1 == filenames2  # Same seed should give same result
     
-    def test_split_filter_with_max_data(self, temp_multi_file):
+    def test_split_filter_with_max_data(self, temp_multi_jsonl_file):
         """Test split_filter works correctly with max_data and random_sample."""
         # Test with split_filter='train' and max_data=3
         dataset = PubTabNetDataset(
-            ann_file=temp_multi_file,
+            ann_file=temp_multi_jsonl_file,
             split_filter='train',
             max_data=3,
             lazy_init=False
@@ -409,7 +395,7 @@ class TestPubTabNetDataset:
         # Test with random sampling and split filter
         random.seed(42)
         dataset_random = PubTabNetDataset(
-            ann_file=temp_multi_file,
+            ann_file=temp_multi_jsonl_file,
             split_filter='train',
             max_data=3,
             random_sample=True,
@@ -427,10 +413,10 @@ class TestPubTabNetDataset:
         ('max_data', 100, 'max_data=100'),
         ('random_sample', True, 'random_sample=True'),
     ])
-    def test_repr_includes_parameters(self, temp_json_file, param_name, param_value, expected_in_repr):
+    def test_repr_includes_parameters(self, temp_jsonl_file, param_name, param_value, expected_in_repr):
         """Test that __repr__ includes important parameters."""
         kwargs = {
-            'ann_file': temp_json_file,
+            'ann_file': temp_jsonl_file,
             'lazy_init': False,
             param_name: param_value
         }
