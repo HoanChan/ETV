@@ -1,4 +1,6 @@
-# https://github.com/namtuanly/MTL-TabNet/blob/main/configs/textrecog/master/table_master_ResnetExtract_Ranger_0705.py
+# https://github.com/JiaquanYe/TableMASTER-mmocr/tree/master
+
+
 _base_ = [
     '../../_base_/default_runtime.py'
 ]
@@ -6,11 +8,7 @@ _base_ = [
 
 alphabet_file = './tools/data/alphabet/structure_alphabet.txt'
 alphabet_len = len(open(alphabet_file, 'r').readlines())
-max_seq_len = 500
-
-cell_alphabet_file = './tools/data/alphabet/textline_recognition_alphabet.txt'
-cell_alphabet_len = len(open(cell_alphabet_file, 'r').readlines())
-max_seq_len_cell = 150
+max_seq_len = 600
 
 start_end_same = False
 label_convertor = dict(
@@ -18,20 +16,12 @@ label_convertor = dict(
             dict_file=alphabet_file,
             max_seq_len=max_seq_len,
             start_end_same=start_end_same,
-            with_unknown=True,
-            cell_dict_file=cell_alphabet_file,
-            max_seq_len_cell=max_seq_len_cell)
+            with_unknown=True)
 
 if start_end_same:
     PAD = alphabet_len + 2
 else:
     PAD = alphabet_len + 3
-
-# cell content
-if start_end_same:
-    PAD_CELL = cell_alphabet_len + 2
-else:
-    PAD_CELL = cell_alphabet_len + 3
 
 model = dict(
     type='TABLEMASTER',
@@ -52,7 +42,7 @@ model = dict(
         dropout=0.2,
         max_len=5000),
     decoder=dict(
-        type='TableMasterDecoder',
+        type='TableMasterConcatDecoder',
         N=3,
         decoder=dict(
             self_attn=dict(
@@ -72,7 +62,6 @@ model = dict(
         d_model=512),
     loss=dict(type='MASTERTFLoss', ignore_index=PAD, reduction='mean'),
     bbox_loss=dict(type='TableL1Loss', reduction='sum'),
-    cell_loss=dict(type='MASTERCELLLoss', ignore_inderx=PAD_CELL, reduction='mean'),
     label_convertor=label_convertor,
     max_seq_len=max_seq_len)
 
@@ -99,8 +88,7 @@ train_pipeline = [
         type='Collect',
         keys=['img'],
         meta_keys=[
-            'filename', 'ori_shape', 'img_shape', 'text', 'scale_factor',
-            'bbox', 'bbox_masks', 'pad_shape', 'cell_content'
+            'filename', 'ori_shape', 'img_shape', 'text', 'scale_factor', 'bbox', 'bbox_masks', 'pad_shape'
         ]),
 ]
 
@@ -125,7 +113,7 @@ valid_pipeline = [
         keys=['img'],
         meta_keys=[
             'filename', 'ori_shape', 'img_shape', 'scale_factor',
-            'img_norm_cfg', 'ori_filename', 'bbox', 'bbox_masks', 'pad_shape', 'cell_content'
+            'img_norm_cfg', 'ori_filename', 'bbox', 'bbox_masks', 'pad_shape'
         ]),
 ]
 
@@ -142,7 +130,7 @@ test_pipeline = [
         return_mask=True,
         mask_ratio=(8, 8),
         train_state=TRAIN_STATE),
-    dict(type='TableBboxEncode'),
+    #dict(type='TableBboxEncode'),
     dict(type='ToTensorOCR'),
     dict(type='NormalizeOCR', **img_norm_cfg),
     dict(
@@ -150,13 +138,13 @@ test_pipeline = [
         keys=['img'],
         meta_keys=[
             'filename', 'ori_shape', 'img_shape', 'scale_factor',
-            'img_norm_cfg', 'ori_filename', 'bbox', 'bbox_masks', 'pad_shape', 'cell_content'
+            'img_norm_cfg', 'ori_filename', 'pad_shape'
         ]),
 ]
 
-dataset_type = 'OCRTableDataset'
-train_img_prefix = '/home2/nam/pubtabnet/pubtabnet/train/'
-train_anno_file1 = '/home2/nam/nam_data/data/mmocr_pubtabnet_recognition_0726_train/StructureLabelAddEmptyBbox_train/'
+dataset_type = 'OCRDataset'
+train_img_prefix = '/data_0/yejiaquan/data/TableRecognization/pubtabnet/train/'
+train_anno_file1 = '/data_0/yejiaquan/data/TableRecognization/mergeStructLabelsAddEmptyEsb/'
 train1 = dict(
     type=dataset_type,
     img_prefix=train_img_prefix,
@@ -173,12 +161,12 @@ train1 = dict(
     pipeline=train_pipeline,
     test_mode=False)
 
-valid_img_prefix = '/home2/nam/pubtabnet/pubtabnet/val/'
-valid_anno_file1 = '/home2/nam/nam_data/data/mmocr_pubtabnet_recognition_0726_val_256/StructureLabelAddEmptyBbox_val/'
-valid = dict(
+val_img_prefix = '/data_0/yejiaquan/data/TableRecognization/pubtabnet/val/'
+val_anno_file1 = '/data_0/yejiaquan/data/TableRecognization/mergeStructLabelsAddEmptyEsb_val/'
+val = dict(
     type=dataset_type,
-    img_prefix=valid_img_prefix,
-    ann_file=valid_anno_file1,
+    img_prefix=val_img_prefix,
+    ann_file=val_anno_file1,
     loader=dict(
         type='TableHardDiskLoader',
         repeat=1,
@@ -192,8 +180,8 @@ valid = dict(
     dataset_info='table_master_dataset',
     test_mode=True)
 
-test_img_prefix = '/home2/nam/pubtabnet/pubtabnet/val/'
-test_anno_file1 = '/home2/nam/nam_data/data/mmocr_pubtabnet_recognition_0726_val_256/StructureLabelAddEmptyBbox_val/'
+test_img_prefix = '/data_0/yejiaquan/data/TableRecognization/pubtabnet/val/'
+test_anno_file1 = '/data_0/yejiaquan/data/TableRecognization/mergeStructLabelsAddEmptyEsb_val/'
 test = dict(
     type=dataset_type,
     img_prefix=test_img_prefix,
@@ -212,11 +200,11 @@ test = dict(
     test_mode=True)
 
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=8,
     workers_per_gpu=2,
     train=dict(type='ConcatDataset', datasets=[train1]),
-    val=dict(type='ConcatDataset', datasets=[valid]),
-    test=dict(type='ConcatDataset', datasets=[test], samples_per_gpu=1))
+    val=dict(type='ConcatDataset', datasets=[val]),
+    test=dict(type='ConcatDataset', datasets=[test]))
 
 # optimizer
 optimizer = dict(type='Ranger', lr=1e-3)
@@ -230,7 +218,7 @@ lr_config = dict(
     warmup_iters=50,
     warmup_ratio=1.0 / 3,
     step=[12, 15])
-total_epochs = 20
+total_epochs = 17
 
 # evaluation
 evaluation = dict(interval=1, metric='acc')
