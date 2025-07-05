@@ -1,25 +1,12 @@
 import os
 import bz2
-import json
 from typing import Dict, List, Optional
 from mmengine.dataset import BaseDataset
 from mmengine.fileio import get_local_path
 
-try:
-    import ujson
-    json_loads = ujson.loads
-    json_load = ujson.load
-except ImportError:
-    json_loads = json.loads
-    json_load = json.load
+import ujson
 
-try:
-    from mmocr.registry import DATASETS
-except ImportError:
-    # Fallback for older versions
-    from mmengine.registry import Registry
-    DATASETS = Registry('dataset')
-
+from mmocr.registry import DATASETS
 
 @DATASETS.register_module()
 class PubTabNetDataset(BaseDataset):
@@ -105,15 +92,15 @@ class PubTabNetDataset(BaseDataset):
             if local_path.endswith('.bz2'):
                 with bz2.open(local_path, 'rt', encoding='utf-8') as f:
                     # All bz2 files are treated as JSONL format
-                    raw_data_list = [json_loads(line.strip()) for line in f if line.strip()]
+                    raw_data_list = [ujson.loads(line.strip()) for line in f if line.strip()]
             else:
                 with open(local_path, 'r', encoding='utf-8') as f:
                     if local_path.endswith('.jsonl'):
                         # Line-by-line JSON format
-                        raw_data_list = [json_loads(line.strip()) for line in f if line.strip()]
+                        raw_data_list = [ujson.loads(line.strip()) for line in f if line.strip()]
                     else:
                         # Standard JSON format
-                        raw_data_list = json_load(f)
+                        raw_data_list = ujson.load(f)
 
         data_list = []
         for raw_data_info in raw_data_list:

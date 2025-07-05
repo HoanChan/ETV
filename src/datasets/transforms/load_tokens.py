@@ -2,10 +2,7 @@
 from typing import Optional
 import numpy as np
 from mmcv.transforms import BaseTransform
-
-# from mmocr.registry import TRANSFORMS
-from mmengine.registry import TRANSFORMS
-
+from mmocr.registry import TRANSFORMS
 
 @TRANSFORMS.register_module()
 class LoadTokens(BaseTransform):
