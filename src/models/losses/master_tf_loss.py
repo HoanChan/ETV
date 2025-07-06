@@ -35,10 +35,10 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
         assert isinstance(flatten, bool)
         self.flatten = flatten
 
-    def forward(self, 
-                outputs: torch.Tensor, 
-                targets_dict: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Forward function to compute the cross entropy loss.
+    def _format_inputs(self, 
+                      outputs: torch.Tensor, 
+                      targets_dict: Dict[str, torch.Tensor]) -> tuple:
+        """Format inputs for loss computation.
         
         Args:
             outputs (torch.Tensor): The prediction logits with shape 
@@ -48,7 +48,7 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
                 target information. Must contain 'padded_targets' key.
                 
         Returns:
-            torch.Tensor: The computed cross entropy loss.
+            tuple: Formatted (outputs, targets) tensors ready for loss computation.
         """
         # Extract targets from dictionary
         targets = targets_dict['padded_targets']
@@ -64,5 +64,25 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
         else:
             # Permute to (N, C, L) format expected by CrossEntropyLoss
             outputs = outputs.permute(0, 2, 1).contiguous()
+            
+        return outputs, targets
 
-        return super().forward(outputs, targets)
+    def forward(self, 
+                outputs: torch.Tensor, 
+                targets_dict: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """Forward function to compute the cross entropy loss.
+        
+        Args:
+            outputs (torch.Tensor): The prediction logits with shape 
+                (N, L, C) where N is batch size, L is sequence length, 
+                and C is number of classes.
+            targets_dict (Dict[str, torch.Tensor]): Dictionary containing
+                target information. Must contain 'padded_targets' key.
+                
+        Returns:
+            torch.Tensor: The computed cross entropy loss.
+        """
+        # Format inputs for loss computation
+        formatted_outputs, formatted_targets = self._format_inputs(outputs, targets_dict)
+
+        return super().forward(formatted_outputs, formatted_targets)
