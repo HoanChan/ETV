@@ -24,8 +24,14 @@ class DummyTextRecogDataSample:
 def test_forward_train_shapes(n_layers, n_head, d_model, feat_size, d_inner, attn_drop, ffn_drop, feat_pe_drop, max_seq_len, batch, h, w):
     dictionary = TableMasterDictionary(dict_file=DICT_FILE, with_padding=True, with_start=True)
     model = TableMasterDecoder(
-        n_layers=n_layers, n_head=n_head, d_model=d_model, feat_size=feat_size,
-        d_inner=d_inner, attn_drop=attn_drop, ffn_drop=ffn_drop, feat_pe_drop=feat_pe_drop,
+        n_layers=n_layers, n_head=n_head, d_model=d_model,
+        decoder={
+            'feat_size': feat_size,
+            'd_inner': d_inner,
+            'attn_drop': attn_drop,
+            'ffn_drop': ffn_drop,
+            'feat_pe_drop': feat_pe_drop
+        },
         dictionary=dictionary, max_seq_len=max_seq_len
     )
     feat = torch.randn(batch, d_model, h, w)
@@ -55,8 +61,14 @@ def test_make_target_mask(pad_idx, seq):
 def test_forward_test_shapes(n_layers, n_head, d_model, feat_size, d_inner, attn_drop, ffn_drop, feat_pe_drop, max_seq_len, batch, h, w):
     dictionary = TableMasterDictionary(dict_file=DICT_FILE, with_padding=True, with_start=True)
     model = TableMasterDecoder(
-        n_layers=n_layers, n_head=n_head, d_model=d_model, feat_size=feat_size,
-        d_inner=d_inner, attn_drop=attn_drop, ffn_drop=ffn_drop, feat_pe_drop=feat_pe_drop,
+        n_layers=n_layers, n_head=n_head, d_model=d_model,
+        decoder={
+            'feat_size': feat_size,
+            'd_inner': d_inner,
+            'attn_drop': attn_drop,
+            'ffn_drop': ffn_drop,
+            'feat_pe_drop': feat_pe_drop
+        },
         dictionary=dictionary, max_seq_len=max_seq_len
     )
     feat = torch.randn(batch, d_model, h, w)
@@ -70,7 +82,8 @@ def test_forward_test_shapes(n_layers, n_head, d_model, feat_size, d_inner, attn
 @pytest.mark.parametrize("device", ["cpu"] + (["cuda"] if torch.cuda.is_available() else []))
 def test_device_compatibility(device):
     dictionary = TableMasterDictionary(dict_file=DICT_FILE, with_padding=True, with_start=True)
-    model = TableMasterDecoder(dictionary=dictionary, d_model=512).to(device)
+    model = TableMasterDecoder(dictionary=dictionary, d_model=512)
+    model = model.to(device)
     feat = torch.randn(1, 512, 6, 40, device=device)
     data_samples = [DummyTextRecogDataSample([1,2,3], pad_idx=dictionary.padding_idx, max_len=8)]
     cls_out, bbox_out = model.forward_train(feat=feat, data_samples=data_samples)
@@ -105,9 +118,9 @@ def test_invalid_layer_params(d_model, n_head, d_inner, expect_error):
     dictionary = TableMasterDictionary(dict_file=DICT_FILE, with_padding=True, with_start=True)
     if expect_error:
         with pytest.raises(Exception):
-            TableMasterDecoder(d_model=d_model, n_head=n_head, d_inner=d_inner, dictionary=dictionary)
+            TableMasterDecoder(d_model=d_model, n_head=n_head, decoder={'d_inner': d_inner}, dictionary=dictionary)
     else:
-        TableMasterDecoder(d_model=d_model, n_head=n_head, d_inner=d_inner, dictionary=dictionary)
+        TableMasterDecoder(d_model=d_model, n_head=n_head, decoder={'d_inner': d_inner}, dictionary=dictionary)
 
 @pytest.mark.parametrize("value_fn", [
     lambda shape: torch.zeros(shape),

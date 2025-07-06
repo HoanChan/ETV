@@ -30,7 +30,7 @@ def dummy_decoder():
         def forward(self, x):
             return x.sum(dim=-1)
     dummy_dict = {'type': 'BaseDictionary', 'dict_file': 'src/data/structure_vocab.txt'}
-    decoder = TableMasterConcatDecoder(dictionary=dummy_dict)
+    decoder = TableMasterConcatDecoder(dictionary=dummy_dict, decoder={'feat_size': 4, 'd_inner': 8, 'attn_drop': 0.0, 'ffn_drop': 0.0, 'feat_pe_drop': 0.0})
     # Patch layers
     decoder.embedding = DummyEmbedding()
     decoder.positional_encoding = DummyPositionalEncoding()

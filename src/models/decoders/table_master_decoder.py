@@ -1,4 +1,3 @@
-
 import copy
 from typing import Dict, Optional, Sequence, Tuple, Union
 import torch
@@ -25,16 +24,8 @@ class TableMasterDecoder(BaseDecoder):
         n_head (int): Number of parallel attention heads. Defaults to 8.
         d_model (int): Dimension of the input from previous model.
             Defaults to 512.
-        feat_size (int): The size of the input feature from previous model,
-            usually H * W. Defaults to 6 * 40.
-        d_inner (int): Hidden dimension of feedforward layers.
-            Defaults to 2048.
-        attn_drop (float): Dropout rate of the attention layer. Defaults to 0.
-        ffn_drop (float): Dropout rate of the feedforward layer. Defaults to 0.
-        feat_pe_drop (float): Dropout rate of the feature positional encoding
-            layer. Defaults to 0.2.
-        dictionary (dict or Dictionary): The config for Dictionary or
-            the instance of Dictionary. Defaults to None.
+        decoder (dict, optional): Config dict for decoder layers. Should contain keys:
+            'feat_size', 'd_inner', 'attn_drop', 'ffn_drop'.
         module_loss (dict, optional): Config to build module_loss. Defaults
             to None.
         postprocessor (dict, optional): Config to build postprocessor.
@@ -48,17 +39,29 @@ class TableMasterDecoder(BaseDecoder):
         n_layers: int = 3,
         n_head: int = 8,
         d_model: int = 512,
-        feat_size: int = 6 * 40,
-        d_inner: int = 2048,
-        attn_drop: float = 0.,
-        ffn_drop: float = 0.,
-        feat_pe_drop: float = 0.2,
+        decoder: Optional[Dict] = None,
         module_loss: Optional[Dict] = None,
         postprocessor: Optional[Dict] = None,
         dictionary: Optional[Union[Dict, Dictionary]] = None,
         max_seq_len: int = 30,
         init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
     ):
+        """
+        Args:
+            n_layers (int): Number of attention layers. Defaults to 3.
+            n_head (int): Number of parallel attention heads. Defaults to 8.
+            d_model (int): Dimension of the input from previous model.
+                Defaults to 512.
+            decoder (dict, optional): Config dict for decoder layers. Should contain keys:
+                'feat_size', 'd_inner', 'attn_drop', 'ffn_drop'.
+        """
+        decoder = decoder or {}
+        feat_size = decoder.get('feat_size', 6 * 40)
+        d_inner = decoder.get('d_inner', 2048)
+        attn_drop = decoder.get('attn_drop', 0.)
+        ffn_drop = decoder.get('ffn_drop', 0.)
+        feat_pe_drop = decoder.get('feat_pe_drop', 0.2)
+
         super().__init__(
             module_loss=module_loss,
             postprocessor=postprocessor,
@@ -74,7 +77,6 @@ class TableMasterDecoder(BaseDecoder):
             ffn_drop=ffn_drop,
             operation_order=('norm', 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn')
         )
-        
         
         # Shared decoder layers
         self.decoder_layers = ModuleList([copy.deepcopy(decoder_layer) for _ in range(n_layers - 1)])
