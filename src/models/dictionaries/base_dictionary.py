@@ -3,10 +3,11 @@ from typing import List, Sequence
 
 from mmocr.registry import TASK_UTILS
 from mmocr.utils import list_from_file
+from mmocr.models.common.dictionary import Dictionary
 
 
 @TASK_UTILS.register_module()
-class BaseDictionary:
+class BaseDictionary(Dictionary):
     """The class generates a dictionary for recognition. It supports both
     single characters and multi-character tokens. It pre-defines four
     special tokens: ``start_token``, ``end_token``, ``pad_token``, and
