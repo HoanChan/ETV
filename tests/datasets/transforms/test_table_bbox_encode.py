@@ -84,10 +84,10 @@ class TestTableBboxEncode:
     @pytest.mark.parametrize("img_shape,bbox_xyxy,expected_xywh_norm", [
         # Test case 1: Simple square image
         ((100, 100, 3), [[20, 20, 60, 60]], [[0.4, 0.4, 0.4, 0.4]]),
-        # Test case 2: Rectangular image  
-        ((200, 100, 3), [[10, 20, 50, 80]], [[0.3, 0.5, 0.4, 0.3]]),
+        # Test case 2: Rectangular image - FIXED: y center = (20+80)/2=50, normalized = 50/200=0.25
+        ((200, 100, 3), [[10, 20, 50, 80]], [[0.3, 0.25, 0.4, 0.3]]),
         # Test case 3: Multiple bboxes
-        ((100, 100, 3), [[0, 0, 50, 50], [50, 50, 100, 100]], 
+        ((100, 100, 3), [[0, 0, 50, 50], [50, 50, 100, 100]],
          [[0.25, 0.25, 0.5, 0.5], [0.75, 0.75, 0.5, 0.5]])
     ])
     def test_bbox_conversion_parametrized(self, img_shape, bbox_xyxy, expected_xywh_norm):

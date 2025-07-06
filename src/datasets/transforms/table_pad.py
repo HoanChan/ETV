@@ -47,6 +47,10 @@ class TablePad(BaseTransform):
                  train_state: bool = True):
         super().__init__()
         
+        # Validate size type before reversing
+        if size is not None and not isinstance(size, (tuple, list)):
+            raise TypeError("size must be a tuple or list, not {}".format(type(size)))
+            
         # Reverse size to match (width, height) format internally
         self.size = size[::-1] if size is not None else None
         self.size_divisor = size_divisor

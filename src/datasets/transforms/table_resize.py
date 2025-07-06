@@ -72,6 +72,14 @@ class TableResize(BaseTransform):
                 else:
                     resize_h = h / w * self.img_scale[0]
                     return (self.img_scale[0], int(resize_h))
+            elif isinstance(self.img_scale, tuple):
+                # Use img_scale directly when provided
+                target_w, target_h = self.img_scale
+                # Keep aspect ratio by scaling to fit within target size
+                scale_w = target_w / w
+                scale_h = target_h / h
+                scale = min(scale_w, scale_h)
+                return (int(w * scale), int(h * scale))
             else:
                 return (int(w), int(h))
         else:
@@ -108,26 +116,26 @@ class TableResize(BaseTransform):
         """
         img = results['img']
         h, w = img.shape[:2]
+        
+        new_w, new_h = w, h
 
         # Apply min_size constraint
         if self.min_size is not None:
-            if w > h:
-                w = self.min_size / h * w
-                h = self.min_size
-            else:
-                h = self.min_size / w * h
-                w = self.min_size
+            min_side = min(w, h)
+            if min_side < self.min_size:
+                scale = self.min_size / min_side
+                new_w = int(w * scale)
+                new_h = int(h * scale)
 
         # Apply long_size constraint
         if self.long_size is not None:
-            if w < h:
-                w = self.long_size / h * w
-                h = self.long_size
-            else:
-                h = self.long_size / w * h
-                w = self.long_size
+            max_side = max(new_w, new_h)
+            if max_side != self.long_size:  # Scale to match long_size exactly
+                scale = self.long_size / max_side
+                new_w = int(new_w * scale)
+                new_h = int(new_h * scale)
 
-        img_scale = self._get_resize_scale(w, h)
+        img_scale = self._get_resize_scale(new_w, new_h)
         resize_img = cv2.resize(img, img_scale, interpolation=self.interpolation)
         scale_factor = (resize_img.shape[0] / img.shape[0], resize_img.shape[1] / img.shape[1])
 

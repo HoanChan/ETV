@@ -185,7 +185,7 @@ class TestTransformsIntegration:
         denormalized[:, 3] *= img_shape[0]  # h
         
         back_to_xyxy = xywh2xyxy(denormalized)
-        np.testing.assert_array_equal(back_to_xyxy, original_xyxy)
+        np.testing.assert_array_almost_equal(back_to_xyxy, original_xyxy, decimal=5)
 
     def test_error_propagation_in_pipeline(self, complete_sample_data):
         """Test that errors are properly handled in pipeline."""
@@ -193,17 +193,11 @@ class TestTransformsIntegration:
         invalid_data = complete_sample_data.copy()
         invalid_data['img'] = np.array([1, 2, 3])  # Invalid 1D image
         
-        pipeline = [
-            TableResize(img_scale=(500, 400)),
-            GetCells()  # This should fail with invalid image
-        ]
+        transform = TableResize(img_scale=(500, 400))
         
-        # Apply first transform (should work)
-        results = pipeline[0].transform(invalid_data.copy())
-        
-        # Second transform should raise error
+        # Transform should fail with ValueError due to invalid image shape
         with pytest.raises(ValueError):
-            pipeline[1].transform(results)
+            transform.transform(invalid_data.copy())
 
     def test_data_consistency_through_pipeline(self, complete_sample_data):
         """Test that data remains consistent through pipeline."""

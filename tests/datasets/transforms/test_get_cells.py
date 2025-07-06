@@ -200,17 +200,7 @@ def test_empty_or_missing_instances(sample_img, test_input, expected_count, desc
     results = transform(results)
     
     assert len(results['cell_imgs']) == expected_count
-def test_empty_or_missing_instances(sample_img, test_input, expected_count):
-    """Test with empty or missing instances."""
-    if test_input is None:
-        results = {'img': sample_img}  # No 'instances' key
-    else:
-        results = {'img': sample_img, 'instances': test_input}
-    
-    transform = GetCells()
-    results = transform(results)
-    
-    assert len(results['cell_imgs']) == expected_count
+
 
 def test_cell_image_copy(sample_results):
     """Test that cell images are properly copied."""

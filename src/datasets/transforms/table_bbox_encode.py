@@ -46,6 +46,10 @@ class TableBboxEncode(BaseTransform):
         # Get bboxes from img_info
         bboxes = results['img_info']['bbox']
         
+        # Ensure bboxes are float32
+        if bboxes.dtype != np.float32:
+            bboxes = bboxes.astype(np.float32)
+        
         # Convert from xyxy to xywh format
         bboxes = xyxy2xywh(bboxes)
         
