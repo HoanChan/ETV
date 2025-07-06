@@ -1,116 +1,250 @@
 
-@DECODERS.register_module()
+import copy
+from typing import Dict, Optional, Sequence, Tuple, Union
+import torch
+import torch.nn as nn
+from mmengine.model import ModuleList
+from mmocr.registry import MODELS
+from mmocr.structures import TextRecogDataSample
+from mmocr.models.common.dictionary import Dictionary
+from mmocr.models.common.modules import PositionalEncoding
+from mmocr.models.textrecog.decoders.base import BaseDecoder
+from mmocr.models.textrecog.decoders.master_decoder import Embeddings
+from ..layers.tmd_layer import TMDLayer
+
+@MODELS.register_module()
 class TableMasterDecoder(BaseDecoder):
-    """
+    """TableMaster Decoder module.
+    
     Split to two transformer header at the last layer.
     Cls_layer is used to structure token classification.
     Bbox_layer is used to regress bbox coord.
+
+    Args:
+        n_layers (int): Number of attention layers. Defaults to 3.
+        n_head (int): Number of parallel attention heads. Defaults to 8.
+        d_model (int): Dimension of the input from previous model.
+            Defaults to 512.
+        feat_size (int): The size of the input feature from previous model,
+            usually H * W. Defaults to 6 * 40.
+        d_inner (int): Hidden dimension of feedforward layers.
+            Defaults to 2048.
+        attn_drop (float): Dropout rate of the attention layer. Defaults to 0.
+        ffn_drop (float): Dropout rate of the feedforward layer. Defaults to 0.
+        feat_pe_drop (float): Dropout rate of the feature positional encoding
+            layer. Defaults to 0.2.
+        dictionary (dict or Dictionary): The config for Dictionary or
+            the instance of Dictionary. Defaults to None.
+        module_loss (dict, optional): Config to build module_loss. Defaults
+            to None.
+        postprocessor (dict, optional): Config to build postprocessor.
+            Defaults to None.
+        max_seq_len (int): Maximum output sequence length. Defaults to 30.
+        init_cfg (dict or list[dict], optional): Initialization configs.
     """
-    def __init__(self,
-                 N,
-                 decoder,
-                 d_model,
-                 num_classes,
-                 start_idx,
-                 padding_idx,
-                 max_seq_len,
-                 ):
-        super(TableMasterDecoder, self).__init__()
-        self.layers = clones(DecoderLayer(**decoder), N-1)
-        self.cls_layer = clones(DecoderLayer(**decoder), 1)
-        self.bbox_layer = clones(DecoderLayer(**decoder), 1)
-        self.cls_fc = nn.Linear(d_model, num_classes)
+
+    def __init__(
+        self,
+        n_layers: int = 3,
+        n_head: int = 8,
+        d_model: int = 512,
+        feat_size: int = 6 * 40,
+        d_inner: int = 2048,
+        attn_drop: float = 0.,
+        ffn_drop: float = 0.,
+        feat_pe_drop: float = 0.2,
+        module_loss: Optional[Dict] = None,
+        postprocessor: Optional[Dict] = None,
+        dictionary: Optional[Union[Dict, Dictionary]] = None,
+        max_seq_len: int = 30,
+        init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
+    ):
+        super().__init__(
+            module_loss=module_loss,
+            postprocessor=postprocessor,
+            dictionary=dictionary,
+            init_cfg=init_cfg,
+            max_seq_len=max_seq_len)
+        
+        decoder_layer = TMDLayer(
+            d_model=d_model,
+            n_head=n_head,
+            d_inner=d_inner,
+            attn_drop=attn_drop,
+            ffn_drop=ffn_drop,
+            operation_order=('norm', 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn')
+        )
+        
+        
+        # Shared decoder layers
+        self.decoder_layers = ModuleList([copy.deepcopy(decoder_layer) for _ in range(n_layers - 1)])
+        # Separate classification and bbox layers
+        self.cls_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
+        self.bbox_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
+
+        # Classification head
+        self.cls_fc = nn.Linear(d_model, self.dictionary.num_classes)
+        
+        # Bbox regression head
         self.bbox_fc = nn.Sequential(
             nn.Linear(d_model, 4),
             nn.Sigmoid()
         )
-        self.norm = nn.LayerNorm(decoder.size)
-        self.embedding = Embeddings(d_model=d_model, vocab=num_classes)
-        self.positional_encoding = PositionalEncoding(d_model=d_model)
 
-        self.SOS = start_idx
-        self.PAD = padding_idx
-        self.max_length = max_seq_len
+        self.SOS = self.dictionary.start_idx
+        self.PAD = self.dictionary.padding_idx
+        self.max_seq_len = max_seq_len
+        self.feat_size = feat_size
+        self.n_head = n_head
 
-    def make_mask(self, src, tgt):
+        self.embedding = Embeddings(
+            d_model=d_model, vocab=self.dictionary.num_classes)
+
+        self.positional_encoding = PositionalEncoding(
+            d_hid=d_model, n_position=self.max_seq_len + 1)
+        self.feat_positional_encoding = PositionalEncoding(
+            d_hid=d_model, n_position=self.feat_size, dropout=feat_pe_drop)
+        
+        self.norm = nn.LayerNorm(d_model)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def make_target_mask(self, tgt: torch.Tensor,
+                         device: torch.device) -> torch.Tensor:
+        """Make target mask for self attention.
+
+        Args:
+            tgt (Tensor): Shape [N, l_tgt]
+            device (torch.device): Mask device.
+
+        Returns:
+            Tensor: Mask of shape [N * self.n_head, l_tgt, l_tgt]
         """
-        Make mask for self attention.
-        :param src: [b, c, h, l_src]
-        :param tgt: [b, l_tgt]
-        :return:
-        """
-        trg_pad_mask = (tgt != self.PAD).unsqueeze(1).unsqueeze(3).byte()
-
+        trg_pad_mask = (tgt != self.PAD).unsqueeze(1).unsqueeze(3).bool()
         tgt_len = tgt.size(1)
-        trg_sub_mask = torch.tril(torch.ones((tgt_len, tgt_len), dtype=torch.uint8, device=src.device))
-
+        trg_sub_mask = torch.tril(
+            torch.ones((tgt_len, tgt_len), dtype=torch.bool, device=device))
         tgt_mask = trg_pad_mask & trg_sub_mask
-        return None, tgt_mask
 
-    def decode(self, input, feature, src_mask, tgt_mask):
-        # main process of transformer decoder.
-        x = self.embedding(input)
-        x = self.positional_encoding(x)
+        # inverse for mmcv's BaseTransformerLayer
+        tril_mask = tgt_mask.clone()
+        tgt_mask = tgt_mask.float().masked_fill_(tril_mask == 0, -1e9)
+        tgt_mask = tgt_mask.masked_fill_(tril_mask, 0)
+        tgt_mask = tgt_mask.repeat(1, self.n_head, 1, 1)
+        tgt_mask = tgt_mask.view(-1, tgt_len, tgt_len)
+        return tgt_mask
 
-        # origin transformer layers
-        for i, layer in enumerate(self.layers):
-            x = layer(x, feature, src_mask, tgt_mask)
+    def decode(self, tgt_seq: torch.Tensor, feature: torch.Tensor,
+               src_mask: torch.BoolTensor,
+               tgt_mask: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Decode the input sequence.
 
-        # cls head
+        Args:
+            tgt_seq (Tensor): Target sequence of shape: (N, T, C).
+            feature (Tensor): Input feature map from encoder of
+                shape: (N, C, H, W)
+            src_mask (BoolTensor): The source mask of shape: (N, H*W).
+            tgt_mask (BoolTensor): The target mask of shape: (N, T, T).
+
+        Returns:
+            Tuple[Tensor, Tensor]: The decoded classification and bbox outputs.
+        """
+        tgt_seq = self.embedding(tgt_seq)
+        x = self.positional_encoding(tgt_seq)
+        attn_masks = [tgt_mask, src_mask]
+        
+        # Shared decoder layers
+        for layer in self.decoder_layers:
+            x = layer(query=x, key=feature, value=feature, attn_masks=attn_masks)
+        
+        # Classification head
+        cls_x = x
         for layer in self.cls_layer:
-            cls_x = layer(x, feature, src_mask, tgt_mask)
+            cls_x = layer(query=cls_x, key=feature, value=feature, attn_masks=attn_masks)
         cls_x = self.norm(cls_x)
-
-        # bbox head
+        cls_output = self.cls_fc(cls_x)
+        
+        # Bbox head
+        bbox_x = x
         for layer in self.bbox_layer:
-            bbox_x = layer(x, feature, src_mask, tgt_mask)
+            bbox_x = layer(query=bbox_x, key=feature, value=feature, attn_masks=attn_masks)
         bbox_x = self.norm(bbox_x)
+        bbox_output = self.bbox_fc(bbox_x)
+        
+        return cls_output, bbox_output
 
-        return self.cls_fc(cls_x), self.bbox_fc(bbox_x)
+    def forward_train(self,
+                      feat: Optional[torch.Tensor] = None,
+                      out_enc: torch.Tensor = None,
+                      data_samples: Sequence[TextRecogDataSample] = None
+                      ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward for training. Source mask will not be used here.
 
-    def greedy_forward(self, SOS, feature, mask):
-        input = SOS
-        output = None
-        for i in range(self.max_length+1):
-            _, target_mask = self.make_mask(feature, input)
-            out, bbox_output = self.decode(input, feature, None, target_mask)
-            output = out
-            prob = F.softmax(out, dim=-1)
-            _, next_word = torch.max(prob, dim=-1)
+        Args:
+            feat (Tensor, optional): Input feature map from backbone.
+            out_enc (Tensor): Unused.
+            data_samples (list[TextRecogDataSample]): Batch of
+                TextRecogDataSample, containing gt_text and valid_ratio
+                information.
+
+        Returns:
+            Tuple[Tensor, Tensor]: The raw classification and bbox logit tensors.
+            Shape (N, T, C) where C is num_classes and (N, T, 4) for bbox.
+        """
+        # flatten 2D feature map
+        if len(feat.shape) > 3:
+            b, c, h, w = feat.shape
+            feat = feat.view(b, c, h * w)
+            feat = feat.permute((0, 2, 1))
+        feat = self.feat_positional_encoding(feat)
+
+        trg_seq = []
+        for target in data_samples:
+            trg_seq.append(target.gt_text.padded_indexes.to(feat.device))
+
+        trg_seq = torch.stack(trg_seq, dim=0)
+
+        src_mask = None
+        tgt_mask = self.make_target_mask(trg_seq, device=feat.device)
+        return self.decode(trg_seq, feat, src_mask, tgt_mask)
+
+    def forward_test(self,
+                     feat: Optional[torch.Tensor] = None,
+                     out_enc: torch.Tensor = None,
+                     data_samples: Sequence[TextRecogDataSample] = None
+                     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward for testing.
+
+        Args:
+            feat (Tensor, optional): Input feature map from backbone.
+            out_enc (Tensor): Unused.
+            data_samples (list[TextRecogDataSample]): Unused.
+
+        Returns:
+            Tuple[Tensor, Tensor]: Character probabilities and bbox outputs.
+            Shape (N, self.max_seq_len, C) where C is num_classes
+            and (N, self.max_seq_len, 4) for bbox.
+        """
+        # flatten 2D feature map
+        if len(feat.shape) > 3:
+            b, c, h, w = feat.shape
+            feat = feat.view(b, c, h * w)
+            feat = feat.permute((0, 2, 1))
+        feat = self.feat_positional_encoding(feat)
+
+        N = feat.shape[0]
+        input = torch.full((N, 1),
+                           self.SOS,
+                           device=feat.device,
+                           dtype=torch.long)
+        cls_output = None
+        bbox_output = None
+        
+        for _ in range(self.max_seq_len):
+            target_mask = self.make_target_mask(input, device=feat.device)
+            cls_out, bbox_out = self.decode(input, feat, None, target_mask)
+            cls_output = cls_out
+            bbox_output = bbox_out
+            _, next_word = torch.max(cls_out, dim=-1)
             input = torch.cat([input, next_word[:, -1].unsqueeze(-1)], dim=1)
-        return output, bbox_output
-
-    def forward_train(self, feat, out_enc, targets_dict, img_metas=None):
-        # x is token of label
-        # feat is feature after backbone before pe.
-        # out_enc is feature after pe.
-        device = feat.device
-        if isinstance(targets_dict, dict):
-            padded_targets = targets_dict['padded_targets'].to(device)
-        else:
-            padded_targets = targets_dict.to(device)
-
-        src_mask = None
-        _, tgt_mask = self.make_mask(out_enc, padded_targets[:,:-1])
-        return self.decode(padded_targets[:, :-1], out_enc, src_mask, tgt_mask)
-
-    def forward_test(self, feat, out_enc, img_metas):
-        src_mask = None
-        batch_size = out_enc.shape[0]
-        SOS = torch.zeros(batch_size).long().to(out_enc.device)
-        SOS[:] = self.SOS
-        SOS = SOS.unsqueeze(1)
-        output, bbox_output = self.greedy_forward(SOS, out_enc, src_mask)
-        return output, bbox_output
-
-    def forward(self,
-                feat,
-                out_enc,
-                targets_dict=None,
-                img_metas=None,
-                train_mode=True):
-        self.train_mode = train_mode
-        if train_mode:
-            return self.forward_train(feat, out_enc, targets_dict, img_metas)
-
-        return self.forward_test(feat, out_enc, img_metas)
+        
+        return self.softmax(cls_output), bbox_output
