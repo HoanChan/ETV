@@ -51,7 +51,7 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
             tuple: Formatted (outputs, targets) tensors ready for loss computation.
         """
         # Extract targets from dictionary
-        targets = targets_dict['padded_targets']
+        targets = targets_dict['padded_targets'].to(outputs.device)
         
         # MASTER decoder already handles sequence shifting internally
         # We take targets starting from index 1 to align with predictions
@@ -59,8 +59,8 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
         
         if self.flatten:
             # Flatten for standard CrossEntropyLoss: (N*L, C) and (N*L,)
-            outputs = outputs.view(-1, outputs.size(-1))
-            targets = targets.view(-1)
+            outputs = outputs.contiguous().view(-1, outputs.size(-1))
+            targets = targets.contiguous().view(-1)
         else:
             # Permute to (N, C, L) format expected by CrossEntropyLoss
             outputs = outputs.permute(0, 2, 1).contiguous()
