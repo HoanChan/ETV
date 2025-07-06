@@ -1,41 +1,111 @@
 
-@LOSSES.register_module()
-class TableL1Loss(DistLoss):
-    """Implementation of L1 loss module for table master bbox branch."""
+# Copyright (c) Lê Hoàn Chân. All rights reserved.
+from typing import Dict, Optional
+
+import torch
+import torch.nn as nn
+
+from mmocr.registry import MODELS
+
+
+@MODELS.register_module()
+class TableL1Loss(nn.Module):
+    """Implementation of L1 loss module for table master bbox regression.
+    
+    This loss function is designed for table structure recognition models
+    that predict bounding boxes for table cells and structure elements.
+    
+    Args:
+        reduction (str): Specifies the reduction to apply to the output.
+            Should be 'sum' for proper normalization. Defaults to 'sum'.
+        lambda_horizon (float): Weight for horizontal bbox loss (x, width).
+            Defaults to 1.0.
+        lambda_vertical (float): Weight for vertical bbox loss (y, height).
+            Defaults to 1.0.
+        eps (float): Small epsilon value to avoid division by zero.
+            Defaults to 1e-9.
+        **kwargs: Other keyword arguments.
+    """
+    
     def __init__(self,
-                 reduction='sum',
-                 **kwargs):
-        super().__init__(reduction)
-        self.lambda_horizon = 1.
-        self.lambda_vertical = 1.
-        self.eps = 1e-9
-        # use reduction sum, and divide bbox_mask's nums, to get mean loss.
-        try:
-            assert reduction == 'sum'
-        except AssertionError:
-            raise ('Table L1 loss in bbox branch should keep reduction is sum.')
+                 reduction: str = 'sum',
+                 lambda_horizon: float = 1.0,
+                 lambda_vertical: float = 1.0,
+                 eps: float = 1e-9,
+                 **kwargs) -> None:
+        super().__init__()
+        assert isinstance(reduction, str)
+        assert reduction == 'sum', (
+            'TableL1Loss should use reduction="sum" for proper normalization.')
+        
+        self.reduction = reduction
+        self.lambda_horizon = lambda_horizon
+        self.lambda_vertical = lambda_vertical
+        self.eps = eps
+        
+        # Build L1 loss with sum reduction
+        self.l1_loss = nn.L1Loss(reduction=reduction)
 
-    def build_loss(self, reduction):
-        return nn.L1Loss(reduction=reduction)
-
-    def format(self, outputs, targets_dict):
-        # target in calculate loss, start from idx 1.
-        bboxes = targets_dict['bbox'][:, 1:, :].to(outputs.device)  # bxLx4
-        bbox_masks = targets_dict['bbox_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # bxLx1
-        # mask empty-bbox or non-bbox structure token's bbox.
+    def _format_inputs(self, 
+                      outputs: torch.Tensor, 
+                      targets_dict: Dict[str, torch.Tensor]) -> tuple:
+        """Format inputs for loss computation.
+        
+        Args:
+            outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4).
+            targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
+                information including 'bbox' and 'bbox_masks'.
+                
+        Returns:
+            tuple: Formatted (masked_outputs, masked_targets, bbox_masks).
+        """
+        # Extract targets starting from index 1 to align with predictions
+        bboxes = targets_dict['bbox'][:, 1:, :].to(outputs.device)  # B x L x 4
+        bbox_masks = targets_dict['bbox_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
+        
+        # Apply masks to filter valid bounding boxes
         masked_outputs = outputs * bbox_masks
-        masked_bboxes = bboxes * bbox_masks
-        return masked_outputs, masked_bboxes, bbox_masks
+        masked_targets = bboxes * bbox_masks
+        
+        return masked_outputs, masked_targets, bbox_masks
 
-    def forward(self, outputs, targets_dict, img_metas=None):
-        outputs, targets, bbox_masks = self.format(outputs, targets_dict)
-        # horizon loss (x and width)
-        horizon_sum_loss = self.dist_loss(outputs[:, :, 0::2].contiguous(), targets[:, :, 0::2].contiguous())
-        horizon_loss = horizon_sum_loss / (bbox_masks.sum() + self.eps)
-        # vertical loss (y and height)
-        vertical_sum_loss = self.dist_loss(outputs[:, :, 1::2].contiguous(), targets[:, :, 1::2].contiguous())
-        vertical_loss = vertical_sum_loss / (bbox_masks.sum() + self.eps)
+    def forward(self, 
+                outputs: torch.Tensor, 
+                targets_dict: Dict[str, torch.Tensor], 
+                img_metas: Optional[list] = None) -> Dict[str, torch.Tensor]:
+        """Forward function to compute L1 loss for table bounding boxes.
+        
+        Args:
+            outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4)
+                where B is batch size, L is sequence length, and 4 represents
+                (x, y, width, height).
+            targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
+                information with keys 'bbox' and 'bbox_masks'.
+            img_metas (Optional[list]): Image meta information. Defaults to None.
+                
+        Returns:
+            Dict[str, torch.Tensor]: Dictionary containing computed losses:
+                - 'horizon_bbox_loss': L1 loss for horizontal coordinates (x, width)
+                - 'vertical_bbox_loss': L1 loss for vertical coordinates (y, height)
+        """
+        # Format inputs
+        masked_outputs, masked_targets, bbox_masks = self._format_inputs(outputs, targets_dict)
+        
+        # Compute horizontal loss (x and width coordinates: indices 0, 2)
+        horizon_sum_loss = self.l1_loss(
+            masked_outputs[:, :, 0::2].contiguous(), 
+            masked_targets[:, :, 0::2].contiguous()
+        )
+        horizon_loss = self.lambda_horizon * horizon_sum_loss / (bbox_masks.sum() + self.eps)
+        
+        # Compute vertical loss (y and height coordinates: indices 1, 3)
+        vertical_sum_loss = self.l1_loss(
+            masked_outputs[:, :, 1::2].contiguous(), 
+            masked_targets[:, :, 1::2].contiguous()
+        )
+        vertical_loss = self.lambda_vertical * vertical_sum_loss / (bbox_masks.sum() + self.eps)
 
-        losses = {'horizon_bbox_loss': horizon_loss, 'vertical_bbox_loss': vertical_loss}
-
-        return losses
+        return {
+            'horizon_bbox_loss': horizon_loss, 
+            'vertical_bbox_loss': vertical_loss
+        }
