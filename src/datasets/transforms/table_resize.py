@@ -1,168 +1,58 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional, Union, Tuple
-import random
-import cv2
-import numpy as np
-from mmcv.transforms.base import BaseTransform
+from typing import Dict, Optional
 from mmocr.registry import TRANSFORMS
-
+from mmocr.datasets.transforms import Resize  # Import MMOCR's Resize class
 
 @TRANSFORMS.register_module()
-class TableResize(BaseTransform):
-    """Image resizing transform for Table Recognition OCR and Table Structure Recognition.
+class TableResize(Resize):
+    """Image resizing transform for Table Recognition with min_size and long_size constraints.
     
-    This transform resizes images while optionally maintaining aspect ratio and handling
-    bounding box coordinates for table structure recognition tasks.
+    Extends MMOCR's Resize to add table-specific size constraints.
     
-    Required Keys:
-        - img (ndarray): Input image
-        
-    Modified Keys:
-        - img (ndarray): Resized image
-        - img_shape (tuple): Shape of resized image
-        - pad_shape (tuple): Same as img_shape after resize
-        - scale_factor (tuple): Scale factor applied (height_scale, width_scale)
-        
-    Added Keys:
-        - keep_ratio (bool): Whether aspect ratio was kept
-        
     Args:
-        img_scale (tuple, optional): Target image scale (width, height).
-            If -1 is used for width or height, it will be calculated based on aspect ratio.
         min_size (int, optional): Minimum size for the shorter side.
-        ratio_range (list, optional): Random ratio range for augmentation [min_ratio, max_ratio].
-        interpolation (int): Interpolation method. Defaults to cv2.INTER_LINEAR.
-        keep_ratio (bool): Whether to keep aspect ratio. Defaults to True.
-        long_size (int, optional): Target size for the longer side.
+        long_size (int, optional): Target size for the longer side. if provided, the min_size will be ignored.
+        **kwargs: Arguments passed to parent Resize class.
     """
 
     def __init__(self,
-                 img_scale: Optional[Tuple[int, int]] = None,
                  min_size: Optional[int] = None,
-                 ratio_range: Optional[list] = None,
-                 interpolation: int = cv2.INTER_LINEAR,
-                 keep_ratio: bool = True,
-                 long_size: Optional[int] = None):
-        super().__init__()
-        self.img_scale = img_scale
+                 long_size: Optional[int] = None,
+                 **kwargs):
+        # Nếu không có scale/scale_factor thì truyền scale=(1,1) cho lớp cha để tránh lỗi
+        if 'scale' not in kwargs and 'scale_factor' not in kwargs:
+            kwargs['scale'] = (1, 1)
+        kwargs['keep_ratio'] = True  # Ensure keep_ratio is set to True
+        super().__init__(**kwargs)
         self.min_size = min_size
-        self.ratio_range = ratio_range
-        self.interpolation = interpolation
         self.long_size = long_size
-        self.keep_ratio = keep_ratio
-
-    def _get_resize_scale(self, w: int, h: int) -> Tuple[int, int]:
-        """Calculate target resize scale based on current dimensions and parameters.
-        
-        Args:
-            w (int): Current width
-            h (int): Current height
-            
-        Returns:
-            tuple: Target (width, height) for resize
-        """
-        if self.keep_ratio:
-            if self.img_scale is None and isinstance(self.ratio_range, list):
-                choice_ratio = random.uniform(self.ratio_range[0], self.ratio_range[1])
-                return (int(w * choice_ratio), int(h * choice_ratio))
-            elif isinstance(self.img_scale, tuple) and -1 in self.img_scale:
-                if self.img_scale[0] == -1:
-                    resize_w = w / h * self.img_scale[1]
-                    return (int(resize_w), self.img_scale[1])
-                else:
-                    resize_h = h / w * self.img_scale[0]
-                    return (self.img_scale[0], int(resize_h))
-            elif isinstance(self.img_scale, tuple):
-                # Use img_scale directly when provided
-                target_w, target_h = self.img_scale
-                # Keep aspect ratio by scaling to fit within target size
-                scale_w = target_w / w
-                scale_h = target_h / h
-                scale = min(scale_w, scale_h)
-                return (int(w * scale), int(h * scale))
-            else:
-                return (int(w), int(h))
-        else:
-            if isinstance(self.img_scale, tuple):
-                return self.img_scale
-            else:
-                raise NotImplementedError("img_scale must be a tuple when keep_ratio=False")
-
-    def _resize_bboxes(self, results: Dict) -> None:
-        """Resize bounding boxes according to the scale factor.
-        
-        Args:
-            results (dict): Results dict containing bboxes and scale factor
-        """
-        img_shape = results['img_shape']
-        if 'img_info' in results.keys():
-            # train and validate phase
-            if results['img_info'].get('bbox', None) is not None:
-                bboxes = results['img_info']['bbox']
-                scale_factor = results['scale_factor']
-                # Apply scale and clip to image boundaries
-                bboxes[..., 0::2] = np.clip(bboxes[..., 0::2] * scale_factor[1], 0, img_shape[1]-1)
-                bboxes[..., 1::2] = np.clip(bboxes[..., 1::2] * scale_factor[0], 0, img_shape[0]-1)
-                results['img_info']['bbox'] = bboxes
-            else:
-                raise ValueError('results should have bbox keys.')
-        # testing phase - no bbox to resize
 
     def _resize_img(self, results: Dict) -> None:
-        """Resize the image according to the specified parameters.
-        
-        Args:
-            results (dict): Results dict containing the image
-        """
-        img = results['img']
-        h, w = img.shape[:2]
-        
-        new_w, new_h = w, h
+        """Apply size constraints then use parent's resize logic."""
+        if results.get('img', None) is not None:
+            img = results['img']
+            h, w = img.shape[:2]
+            scale = 1.0
 
-        # Apply min_size constraint
-        if self.min_size is not None:
-            min_side = min(w, h)
-            if min_side < self.min_size:
-                scale = self.min_size / min_side
-                new_w = int(w * scale)
-                new_h = int(h * scale)
+            # Apply long_size constraint
+            if self.long_size is not None:
+                max_side = max(w, h)
+                if max_side != self.long_size:
+                    scale = self.long_size / max_side
+            elif self.min_size is not None:  # Apply min_size constraint
+                min_side = min(w, h)
+                if min_side < self.min_size:
+                    scale = self.min_size / min_side
 
-        # Apply long_size constraint
-        if self.long_size is not None:
-            max_side = max(new_w, new_h)
-            if max_side != self.long_size:  # Scale to match long_size exactly
-                scale = self.long_size / max_side
-                new_w = int(new_w * scale)
-                new_h = int(new_h * scale)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
 
-        img_scale = self._get_resize_scale(new_w, new_h)
-        resize_img = cv2.resize(img, img_scale, interpolation=self.interpolation)
-        scale_factor = (resize_img.shape[0] / img.shape[0], resize_img.shape[1] / img.shape[1])
-
-        results['img'] = resize_img
-        results['img_shape'] = resize_img.shape
-        results['pad_shape'] = resize_img.shape
-        results['scale_factor'] = scale_factor
-        results['keep_ratio'] = self.keep_ratio
-
-    def transform(self, results: Dict) -> Dict:
-        """Transform function to resize image and bboxes.
-        
-        Args:
-            results (dict): Result dict from loading pipeline.
+            # Set scale and use parent's logic
+            results['scale'] = (new_w, new_h)
             
-        Returns:
-            dict: Updated result dict with resized image and bboxes.
-        """
-        self._resize_img(results)
-        self._resize_bboxes(results)
-        return results
+        super()._resize_img(results)
 
     def __repr__(self) -> str:
         repr_str = self.__class__.__name__
-        repr_str += f'(img_scale={self.img_scale}, '
-        repr_str += f'min_size={self.min_size}, '
-        repr_str += f'ratio_range={self.ratio_range}, '
-        repr_str += f'keep_ratio={self.keep_ratio}, '
-        repr_str += f'long_size={self.long_size})'
+        repr_str += f'(min_size={self.min_size}, long_size={self.long_size})'
         return repr_str
