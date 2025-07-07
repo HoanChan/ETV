@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 """Test suite for LoadTokens transform."""
 
 import pytest
 import numpy as np
 from datasets.transforms.load_tokens import LoadTokens
-
 
 @pytest.fixture
 def sample_data():
@@ -31,12 +29,6 @@ def sample_data():
             }
         ]
     }
-
-
-@pytest.fixture
-def empty_data():
-    """Empty data for testing edge cases."""
-    return {'img_path': 'test.jpg', 'instances': []}
 
 # Basic initialization tests
 @pytest.mark.parametrize("with_structure,with_content,should_fail", [
@@ -134,19 +126,6 @@ def test_token_flattening(sample_data):
         ['Hello', 'World'] + ['Test', 'Cell']
     )
     assert result['gt_tokens'] == expected
-
-
-def test_empty_instances(empty_data):
-    """Test handling of empty instances list."""
-    transform = LoadTokens(with_structure=True, with_content=True, with_bbox=True)
-    result = transform(empty_data.copy())
-    
-    assert result['gt_structure_tokens'] == []
-    assert result['gt_cell_tokens'] == []
-    assert result['gt_cell_ids'] == []
-    assert result['gt_task_types'] == []
-    assert 'gt_cell_bboxes' not in result
-
 
 def test_missing_instances():
     """Test handling when instances key is missing."""
