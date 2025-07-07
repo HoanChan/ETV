@@ -136,7 +136,7 @@ class LoadTokens(BaseTransform):
                 cell_ids.append(instance.get('cell_id', 0))
                 
                 if self.with_bbox and 'bbox' in instance:
-                    bbox = instance['bbox']
+                    bbox = instance.get('bbox', [0, 0, 0, 0])
                     if len(bbox) == 4:
                         cell_bboxes.append(bbox)
                     else:
@@ -145,10 +145,10 @@ class LoadTokens(BaseTransform):
                 elif self.with_bbox:
                     # Add empty bbox if not present but required
                     cell_bboxes.append([0, 0, 0, 0])
-        
-        results['gt_cell_tokens'] = cell_tokens
-        results['gt_cell_ids'] = cell_ids
-        
+        if cell_tokens:
+            results['gt_cell_tokens'] = cell_tokens
+        if cell_ids:
+            results['gt_cell_ids'] = cell_ids
         if self.with_bbox and cell_bboxes:
             results['gt_cell_bboxes'] = np.array(cell_bboxes, dtype=np.float32)
 
@@ -172,10 +172,10 @@ class LoadTokens(BaseTransform):
         Args:
             results (dict): Result dict from table dataset.
         """
-        combined_tokens = []
         
         if self.flatten_tokens:
             # Flatten all tokens into a single list
+            combined_tokens = []
             if 'gt_structure_tokens' in results:
                 combined_tokens.extend(results['gt_structure_tokens'])
             
