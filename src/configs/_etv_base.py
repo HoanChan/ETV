@@ -1,6 +1,55 @@
+from config import *
+# region Dataset
+data_pipeline = [
+    dict(type='LoadImageFromFile'), # 
+    dict(
+        type='TableResize', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
+        keep_ratio=True,
+        long_size=480
+    ),
+    dict(
+        type='TablePad', # file:///./../datasets/transforms/table_pad.py
+        size=(480, 480),
+        pad_val=0,
+        # return_mask=True,
+        # mask_ratio=(8, 8)
+    ),
+    dict(
+        type='PackInputs', # file:///./../datasets/transforms/pack_inputs.py
+        keys=['img'],
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5],
+        meta_keys=('filename', 'ori_shape', 'img_shape', 'scale_factor', 'img_norm_cfg', 'ori_filename', 'pad_shape')
+    )
+]
+
+test_dataset = dict(
+    type='PubTabNetDataset', # file:///./../datasets/table_dataset.py
+    ann_file=VITABSET_TEST_JSON,
+    data_prefix={'img_path': VITABSET_TEST_IMAGE_ROOT},
+    task_type='both',
+    split_filter=None,  # Load all splits available in the file
+    max_structure_len=500,
+    # max_cell_len=500,
+    ignore_empty_cells=True,
+    max_data=-1,  # -1 để load toàn bộ, >0 để giới hạn số lượng sample
+    random_sample=False, 
+    pipeline=data_pipeline
+)
+
+test_dataloader = dict(
+    batch_size=2,
+    num_workers=1,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='DefaultSampler', shuffle=False),
+    dataset=test_dataset
+)
+# endregion
+# region Model
 dictionary = dict(
-    type='Dictionary',
-    dict_file='{{ fileDirname }}/../mmocr/dicts/english_digits_symbols.txt',
+    type='TableMasterDictionary', # file:///./../models/dictionaries/table_master_dictionary.py
+    dict_file='{{ fileDirname }}/../data/structure_vocab.txt',
     with_padding=True,
     with_unknown=True,
     same_start_end=True,
@@ -71,90 +120,15 @@ model = dict(
         type='TextRecogDataPreprocessor',
         mean=[127.5, 127.5, 127.5],
         std=[127.5, 127.5, 127.5]))
+# endregion
 
-train_pipeline = [
-    dict(type='LoadImageFromFile', ignore_empty=True, min_size=2),
-    dict(type='LoadOCRAnnotations', with_text=True),
-    dict(
-        type='RescaleToHeight',
-        height=48,
-        min_width=48,
-        max_width=160,
-        width_divisor=16),
-    dict(type='PadToWidth', width=160),
-    dict(
-        type='PackTextRecogInputs',
-        meta_keys=('img_path', 'ori_shape', 'img_shape', 'valid_ratio'))
-]
-
-test_pipeline = [
-    dict(type='LoadImageFromFile'),
-    dict(
-        type='RescaleToHeight',
-        height=48,
-        min_width=48,
-        max_width=160,
-        width_divisor=16),
-    dict(type='PadToWidth', width=160),
-    # add loading annotation after ``Resize`` because ground truth
-    # does not need to do resize data transform
-    dict(type='LoadOCRAnnotations', with_text=True),
-    dict(
-        type='PackTextRecogInputs',
-        meta_keys=('img_path', 'ori_shape', 'img_shape', 'valid_ratio'))
-]
-
-tta_pipeline = [
-    dict(type='LoadImageFromFile'),
-    dict(
-        type='TestTimeAug',
-        transforms=[
-            [
-                dict(
-                    type='ConditionApply',
-                    true_transforms=[
-                        dict(
-                            type='ImgAugWrapper',
-                            args=[dict(cls='Rot90', k=0, keep_size=False)])
-                    ],
-                    condition="results['img_shape'][1]<results['img_shape'][0]"
-                ),
-                dict(
-                    type='ConditionApply',
-                    true_transforms=[
-                        dict(
-                            type='ImgAugWrapper',
-                            args=[dict(cls='Rot90', k=1, keep_size=False)])
-                    ],
-                    condition="results['img_shape'][1]<results['img_shape'][0]"
-                ),
-                dict(
-                    type='ConditionApply',
-                    true_transforms=[
-                        dict(
-                            type='ImgAugWrapper',
-                            args=[dict(cls='Rot90', k=3, keep_size=False)])
-                    ],
-                    condition="results['img_shape'][1]<results['img_shape'][0]"
-                ),
-            ],
-            [
-                dict(
-                    type='RescaleToHeight',
-                    height=48,
-                    min_width=48,
-                    max_width=160,
-                    width_divisor=16)
-            ],
-            [dict(type='PadToWidth', width=160)],
-            # add loading annotation after ``Resize`` because ground truth
-            # does not need to do resize data transform
-            [dict(type='LoadOCRAnnotations', with_text=True)],
-            [
-                dict(
-                    type='PackTextRecogInputs',
-                    meta_keys=('img_path', 'ori_shape', 'img_shape',
-                               'valid_ratio'))
-            ]
-        ])
-]
+# region Evaluator
+val_evaluator = dict(
+    type='TEDSMetric',
+    structure_only=False,
+    n_jobs=1,
+    ignore_nodes=None,
+    collect_device='cpu',
+    prefix=None
+)
+# endregion
