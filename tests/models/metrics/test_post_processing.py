@@ -1,6 +1,6 @@
 import pytest
 
-from models.metric.post_processing import (
+from models.metrics.post_processing import (
     text_to_list,
     htmlPostProcess,
     deal_isolate_span,

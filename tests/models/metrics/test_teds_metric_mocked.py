@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch
-from models.metric.teds_metric import TEDSMetric
+from models.metrics.teds_metric import TEDSMetric
 
 
 @pytest.mark.parametrize("structure_only,n_jobs,ignore_nodes", [

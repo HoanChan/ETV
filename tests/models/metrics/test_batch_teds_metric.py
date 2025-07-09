@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 
-from models.metric.batch_teds_metric import BatchTEDSMetric
+from models.metrics.batch_teds_metric import BatchTEDSMetric
 
 
 @pytest.fixture

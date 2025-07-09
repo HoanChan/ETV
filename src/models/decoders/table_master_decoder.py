@@ -99,13 +99,10 @@ class TableMasterDecoder(BaseDecoder):
         self.feat_size = feat_size
         self.n_head = n_head
 
-        self.embedding = Embeddings(
-            d_model=d_model, vocab=self.dictionary.num_classes)
+        self.embedding = Embeddings(d_model=d_model, vocab=self.dictionary.num_classes)
 
-        self.positional_encoding = PositionalEncoding(
-            d_hid=d_model, n_position=self.max_seq_len + 1)
-        self.feat_positional_encoding = PositionalEncoding(
-            d_hid=d_model, n_position=self.feat_size, dropout=feat_pe_drop)
+        self.positional_encoding = PositionalEncoding(d_hid=d_model, n_position=self.max_seq_len + 1)
+        self.feat_positional_encoding = PositionalEncoding(d_hid=d_model, n_position=self.feat_size, dropout=feat_pe_drop)
         
         self.norm = nn.LayerNorm(d_model)
         self.softmax = nn.Softmax(dim=-1)

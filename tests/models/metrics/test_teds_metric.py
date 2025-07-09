@@ -1,5 +1,5 @@
 import pytest
-from models.metric.teds_metric import TEDSMetric
+from models.metrics.teds_metric import TEDSMetric
 
 
 @pytest.fixture
