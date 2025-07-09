@@ -115,7 +115,8 @@ def test_compatibility_comprehensive(name, pred, gt, expected_range, structure_o
     
     # Test with new TEDSMetric
     new_teds = TEDSMetric(structure_only=structure_only, ignore_nodes=ignore_nodes)
-    new_score = new_teds.evaluate_single(pred, gt)
+    new_teds.process([], [{'pred_text': {'item': pred}, 'gt_text': {'item': gt}}])
+    new_score = new_teds.evaluate(size=1)['teds']
     
     # Compare scores
     assert abs(old_score - new_score) < 1e-6, f"Score mismatch for {name}: old={old_score}, new={new_score}"
@@ -176,11 +177,11 @@ def test_batch_evaluation(n_samples):
     ]
     
     new_teds.process([], data_samples)
-    
+    results = new_teds.evaluate(size=len(samples))['teds_scores']
     # Compare scores
     for i, sample in enumerate(samples):
         old_score = old_scores[sample['sample_id']]
-        new_score = new_teds.results[i]['teds_score']
+        new_score = results[i]
         assert abs(old_score - new_score) < 1e-6, f"Batch size {n_samples}, sample {i}: old={old_score}, new={new_score}"
 
 
@@ -200,10 +201,10 @@ def test_batch_with_config(structure_only, ignore_nodes):
     ]
     
     new_teds.process([], data_samples)
-    
+    results = new_teds.evaluate(size=len(BATCH_TEST_DATA))['teds_scores']
     for i, sample in enumerate(BATCH_TEST_DATA):
         old_score = old_scores[sample['sample_id']]
-        new_score = new_teds.results[i]['teds_score']
+        new_score = results[i]
         assert abs(old_score - new_score) < 1e-6, f"Config ({structure_only}, {ignore_nodes}), sample {i}: old={old_score}, new={new_score}"
 
 
@@ -213,19 +214,19 @@ def test_compute_metrics_variations(results_count):
     new_teds = TEDSMetric(structure_only=False)
     
     if results_count == 0:
-        metrics = new_teds.compute_metrics([])
-        assert metrics['teds'] == 0.0
+        result = new_teds.compute_metrics([])
+        assert result['teds'] == 0.0
     else:
         mock_results = [{'teds_score': 0.5 + (i * 0.1)} for i in range(results_count)]
-        metrics = new_teds.compute_metrics(mock_results)
-        
-        assert isinstance(metrics, dict)
-        assert 'teds' in metrics and 'teds_max' in metrics and 'teds_min' in metrics
-        assert all(isinstance(v, float) for v in metrics.values())
-        assert 0.0 <= metrics['teds'] <= 1.0
-        
+        result = new_teds.compute_metrics(mock_results)
+
+        assert isinstance(result, dict)
+        assert 'teds' in result and 'teds_max' in result and 'teds_min' in result
+        assert all(isinstance(v, float) for v in result.values())
+        assert 0.0 <= result['teds'] <= 1.0
+
         expected_avg = sum(result['teds_score'] for result in mock_results) / len(mock_results)
-        assert abs(metrics['teds'] - expected_avg) < 1e-6
+        assert abs(result['teds'] - expected_avg) < 1e-6
 
 
 # TEDSMetric specific tests
@@ -303,11 +304,10 @@ def test_process_different_formats(metric, data_format):
         }]
     
     metric.process([], data_samples)
-    
-    assert len(metric.results) == 1
-    assert 'teds_score' in metric.results[0]
-    assert isinstance(metric.results[0]['teds_score'], float)
-    assert 0.0 <= metric.results[0]['teds_score'] <= 1.0
+    result = metric.evaluate(size=len(data_samples))
+    assert 'teds' in result
+    assert isinstance(result['teds'], float)
+    assert 0.0 <= result['teds'] <= 1.0
 
 
 @pytest.mark.parametrize("missing_data_type", ["missing_pred", "missing_gt"])
@@ -319,8 +319,8 @@ def test_process_with_missing_data(metric, missing_data_type):
         data_samples = [{'pred_table': {'html': '<table><tr><td>cell1</td></tr></table>'}}]
     
     metric.process([], data_samples)
-    assert len(metric.results) == 1
-    assert metric.results[0]['teds_score'] == 0.0
+    result = metric.evaluate(size=len(data_samples))
+    assert result['teds'] == 0.0
 
 
 @pytest.mark.parametrize("pred_html,gt_html,expected_score", [
@@ -333,7 +333,8 @@ def test_empty_html_handling(pred_html, gt_html, expected_score):
     metric = TEDSMetric()
     data_samples = [{'pred_table': {'html': pred_html}, 'gt_table': {'html': gt_html}}]
     metric.process([], data_samples)
-    assert metric.results[0]['teds_score'] == expected_score
+    result = metric.evaluate(size=1)
+    assert result['teds'] == expected_score
 
 
 @pytest.mark.parametrize("results,expected_avg", [
@@ -343,6 +344,7 @@ def test_empty_html_handling(pred_html, gt_html, expected_score):
 ])
 def test_compute_metrics_with_results(metric, results, expected_avg):
     """Test compute_metrics with sample results."""
+    metric.results = results
     computed = metric.compute_metrics(results)
     assert 'teds' in computed and 'teds_max' in computed and 'teds_min' in computed
     assert abs(computed['teds'] - expected_avg) < 1e-6
@@ -357,13 +359,15 @@ def test_perfect_vs_different_tables(metric):
     # Test perfect match
     data_samples = [{'pred_table': {'html': perfect_html}, 'gt_table': {'html': perfect_html}}]
     metric.process([], data_samples)
-    perfect_score = metric.results[0]['teds_score']
+    result = metric.evaluate(size=1)
+    perfect_score = result['teds']
     
     # Test different tables
     metric.results = []
     data_samples = [{'pred_table': {'html': different_html}, 'gt_table': {'html': perfect_html}}]
     metric.process([], data_samples)
-    different_score = metric.results[0]['teds_score']
+    result = metric.evaluate(size=1)
+    different_score = result['teds']
     
     assert perfect_score > different_score
     assert perfect_score > 0.9
@@ -379,12 +383,12 @@ def test_structure_only_vs_normal_mode():
     normal_metric = TEDSMetric(structure_only=False)
     data_samples = [{'pred_table': {'html': pred_html}, 'gt_table': {'html': gt_html}}]
     normal_metric.process([], data_samples)
-    normal_score = normal_metric.results[0]['teds_score']
+    normal_score = normal_metric.evaluate(size=len(data_samples))['teds']
     
     # Structure only mode
     structure_metric = TEDSMetric(structure_only=True)
     structure_metric.process([], data_samples)
-    structure_score = structure_metric.results[0]['teds_score']
+    structure_score = structure_metric.evaluate(size=len(data_samples))['teds']
     
     # Structure only should have higher score for same structure but different content
     assert structure_score > normal_score
@@ -403,12 +407,9 @@ def test_multiple_samples_processing(metric):
     ]
     
     metric.process([], data_samples)
-    
-    assert len(metric.results) == 3
-    assert all('teds_score' in result for result in metric.results)
-    
-    computed = metric.compute_metrics(metric.results)
-    assert all(key in computed for key in ['teds', 'teds_max', 'teds_min'])
+    result = metric.compute_metrics(metric.results)
+    assert all('teds' in r for r in result)
+    assert all(key in result for key in ['teds', 'teds_max', 'teds_min', 'teds_scores'])
 
 
 @pytest.mark.parametrize("processing_cycles", [1, 2, 3])
@@ -424,18 +425,18 @@ def test_multiple_processing_cycles(processing_cycles):
         
         data_samples = [{'pred_text': {'item': pred}, 'gt_text': {'item': gt}}]
         metric.process([], data_samples)
-        metrics = metric.compute_metrics(metric.results)
+        result = metric.evaluate(size=len(data_samples))
         
-        assert isinstance(metrics['teds'], float)
-        assert 0.0 <= metrics['teds'] <= 1.0
+        assert isinstance(result['teds'], float)
+        assert 0.0 <= result['teds'] <= 1.0
 
 
 def test_malformed_html_handling(metric):
     """Test with malformed HTML."""
     data_samples = [{'pred_table': {'html': '<table><tr><td>unclosed'}, 'gt_table': {'html': '<table><tr><td>cell1</td></tr></table>'}}]
     metric.process([], data_samples)
-    assert len(metric.results) == 1
-    assert 'teds_score' in metric.results[0]
+    result = metric.evaluate(size=len(data_samples))
+    assert 'teds' in result
 
 
 def test_large_tables(metric):
@@ -445,6 +446,5 @@ def test_large_tables(metric):
     
     data_samples = [{'pred_table': {'html': large_table_html}, 'gt_table': {'html': large_table_html}}]
     metric.process([], data_samples)
-    computed = metric.compute_metrics(metric.results)
-    
-    assert computed['teds'] > 0.9  # Should get perfect score for identical large tables
+    result = metric.evaluate(size=len(data_samples))
+    assert result['teds'] > 0.9  # Should get perfect score for identical large tables

@@ -69,9 +69,11 @@ class TEDSMetric(BaseMetric):
             names to disambiguate homonymous metrics of different evaluators.
             If prefix is not provided in the argument, self.default_prefix
             will be used instead. Defaults to None.
+    Note:
+        TEDS measures the similarity between predicted and ground truth table
+        structures using tree edit distance. Score ranges from 0 to 1, where
+        1 indicates perfect match.
     """
-
-    default_prefix: Optional[str] = 'table'
 
     def __init__(self,
                  structure_only: bool = False,
@@ -79,10 +81,72 @@ class TEDSMetric(BaseMetric):
                  collect_device: str = 'cpu',
                  prefix: Optional[str] = None) -> None:
         super().__init__(collect_device, prefix)
+
         self.structure_only = structure_only
         self.ignore_nodes = ignore_nodes
         self.__tokens__ = []
 
+    def _extract_html_from_sample(self, sample: Dict, is_prediction: bool = True) -> str:
+        """Extract HTML from data sample following MMOCR patterns.
+        
+        Args:
+            sample: Data sample dict
+            is_prediction: Whether this is prediction (True) or ground truth (False)
+            
+        Returns:
+            str: Extracted HTML string
+        """
+        html_content = ""
+        prefix = "pred" if is_prediction else "gt"
+        
+        # Priority 1: Handle tokens + cells format (TableMASTER style)
+        if f'{prefix}_text' in sample and f'{prefix}_cells' in sample:
+            pred_text = sample.get(f'{prefix}_text', '')
+            pred_cells = sample.get(f'{prefix}_cells', [])
+            
+            # Extract from dict format if needed
+            if isinstance(pred_text, dict):
+                pred_text = pred_text.get('item', '')
+            if isinstance(pred_cells, dict):
+                pred_cells = pred_cells.get('item', [])
+            
+            # Convert to string and ensure list
+            pred_text = str(pred_text) if pred_text else ''
+            pred_cells = pred_cells if isinstance(pred_cells, list) else []
+            
+            if pred_text and pred_cells:
+                html_content = self._process_tokens_to_html(pred_text, pred_cells)
+        
+        # Priority 2: Direct table format
+        elif f'{prefix}_table' in sample:
+            table_data = sample.get(f'{prefix}_table', {})
+            html_content = table_data.get('html', '') if isinstance(table_data, dict) else ''
+        
+        # Priority 3: Direct text format  
+        elif f'{prefix}_text' in sample:
+            text_data = sample.get(f'{prefix}_text', '')
+            if isinstance(text_data, dict):
+                html_content = text_data.get('item', '')
+            else:
+                html_content = str(text_data) if text_data else ''
+        
+        # Priority 4: Instances format
+        elif f'{prefix}_instances' in sample:
+            instances = sample.get(f'{prefix}_instances')
+            if instances is not None:
+                if hasattr(instances, 'html'):
+                    html_content = instances.html
+                elif hasattr(instances, 'get'):
+                    html_content = instances.get('html', '')
+                elif isinstance(instances, dict):
+                    html_content = instances.get('html', '')
+        
+        # Post-process HTML
+        if html_content and not html_content.startswith('<html>'):
+            html_content = self._html_post_process(html_content)
+            
+        return html_content
+    
     def tokenize(self, node):
         """Tokenizes table cells."""
         self.__tokens__.append('<%s>' % node.tag)
@@ -211,83 +275,20 @@ class TEDSMetric(BaseMetric):
             data_batch (Sequence[Dict]): A batch of gts.
             data_samples (Sequence[Dict]): A batch of outputs from the model.
         """
-        for data_sample in data_samples:
-            # Extract predicted HTML with post-processing
-            pred_html = ""
-            
-            # Priority 1: Handle raw tokens + cells format (TableMASTER format)
-            if 'pred_text' in data_sample and 'pred_cells' in data_sample:
-                pred_text = data_sample['pred_text']
-                pred_cells = data_sample['pred_cells']
-                
-                # Handle different text formats
-                if isinstance(pred_text, dict):
-                    pred_text = pred_text.get('item', '')
-                elif isinstance(pred_text, str):
-                    pass  # Already string
-                else:
-                    pred_text = str(pred_text)
-                
-                # Handle different cells formats
-                if isinstance(pred_cells, dict):
-                    pred_cells = pred_cells.get('item', [])
-                elif not isinstance(pred_cells, list):
-                    pred_cells = []
-                
-                # Process using mmocr_teds compatible method
-                pred_html = self._process_tokens_to_html(pred_text, pred_cells)
-                
-            # Priority 2: Direct HTML format
-            elif 'pred_table' in data_sample:
-                pred_html = data_sample['pred_table'].get('html', '')
-                if pred_html and not pred_html.startswith('<html>'):
-                    pred_html = self._html_post_process(pred_html)
-                    
-            elif 'pred_text' in data_sample:
-                pred_text = data_sample['pred_text']
-                if isinstance(pred_text, dict):
-                    pred_html = pred_text.get('item', '')
-                else:
-                    pred_html = str(pred_text)
-                if pred_html and not pred_html.startswith('<html>'):
-                    pred_html = self._html_post_process(pred_html)
-                    
-            elif 'pred_instances' in data_sample:
-                pred_instances = data_sample['pred_instances']
-                if hasattr(pred_instances, 'html'):
-                    pred_html = pred_instances.html
-                elif hasattr(pred_instances, 'get'):
-                    pred_html = pred_instances.get('html', '')
-                if pred_html and not pred_html.startswith('<html>'):
-                    pred_html = self._html_post_process(pred_html)
+        for i, data_sample in enumerate(data_samples):
+            # Extract prediction HTML
+            pred_html = self._extract_html_from_sample(data_sample, is_prediction=True)
             
             # Extract ground truth HTML
-            gt_html = ""
-            if 'gt_table' in data_sample:
-                gt_html = data_sample['gt_table'].get('html', '')
-            elif 'gt_text' in data_sample:
-                gt_text = data_sample['gt_text']
-                if isinstance(gt_text, dict):
-                    gt_html = gt_text.get('item', '')
-                else:
-                    gt_html = str(gt_text)
-            elif 'gt_instances' in data_sample:
-                gt_instances = data_sample['gt_instances']
-                if hasattr(gt_instances, 'html'):
-                    gt_html = gt_instances.html
-                elif hasattr(gt_instances, 'get'):
-                    gt_html = gt_instances.get('html', '')
+            # Ưu tiên lấy từ data_sample trước, nếu không có thì lấy từ data_batch
+            gt_html = self._extract_html_from_sample(data_sample, is_prediction=False)
             
-            # Wrap GT HTML if needed
-            if gt_html and not gt_html.startswith('<html>'):
-                gt_html = self._html_post_process(gt_html)
+            # Nếu không có ground truth trong data_sample, thử lấy từ data_batch
+            if not gt_html and i < len(data_batch):
+                gt_html = self._extract_html_from_sample(data_batch[i], is_prediction=False)
 
-            if pred_html and gt_html:
-                teds_score = self.evaluate_single(pred_html, gt_html)
-            else:
-                teds_score = 0.0
-            
-            result = dict(teds_score=teds_score)
+            # Lưu pred_html và gt_html vào result thay vì teds_score
+            result = dict(pred_html=pred_html, gt_html=gt_html)
             self.results.append(result)
 
     def compute_metrics(self, results: Sequence[Dict]) -> Dict:
@@ -301,18 +302,23 @@ class TEDSMetric(BaseMetric):
             and the values are corresponding results.
         """
         if not results:
-            return {'teds': 0.0}
-            
-        teds_scores = [result['teds_score'] for result in results]
+            return {'teds': 0.0, 'teds_max': 0.0, 'teds_min': 0.0, 'teds_scores': []}
+        teds_scores = []
+        for result in results:
+            pred_html = result.get('pred_html', '')
+            gt_html = result.get('gt_html', '')
+            if pred_html and gt_html:
+                teds_score = self.evaluate_single(pred_html, gt_html)
+            else:
+                teds_score = 0.0
+            teds_scores.append(teds_score)
         avg_teds = sum(teds_scores) / len(teds_scores)
-        # Additional statistics
         max_teds = max(teds_scores)
         min_teds = min(teds_scores)
-    
         eval_res = {
             'teds': avg_teds,
             'teds_max': max_teds,
-            'teds_min': min_teds
+            'teds_min': min_teds,
+            'teds_scores': teds_scores
         }
-
         return eval_res
