@@ -1,9 +1,9 @@
 from config import *
 # region Dataset
 data_pipeline = [
-    dict(type='LoadImageFromFile'), # 
+    dict(type='LoadImageFromFile'), # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
     dict(
-        type='TableResize', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
+        type='TableResize', # file:///./../datasets/transforms/table_resize.py
         keep_ratio=True,
         long_size=480
     ),
@@ -23,33 +23,61 @@ data_pipeline = [
     )
 ]
 
-test_dataset = dict(
+train_dataset = dict(
     type='PubTabNetDataset', # file:///./../datasets/table_dataset.py
-    ann_file=VITABSET_TEST_JSON,
-    data_prefix={'img_path': VITABSET_TEST_IMAGE_ROOT},
-    task_type='both',
+    ann_file=VITABSET_TRAIN_JSON,
+    data_prefix={'img_path': VITABSET_TRAIN_IMAGE_ROOT},
+    task_type='structure',  # 'structure' or 'content' or 'both'
     split_filter=None,  # Load all splits available in the file
-    max_structure_len=500,
-    # max_cell_len=500,
+    max_structure_len=600,
+    # max_cell_len=600,
     ignore_empty_cells=True,
     max_data=-1,  # -1 để load toàn bộ, >0 để giới hạn số lượng sample
     random_sample=False, 
-    pipeline=data_pipeline
+    pipeline=data_pipeline,
+    test_mode=False,
 )
-
-test_dataloader = dict(
+train_dataloader = dict(
     batch_size=2,
     num_workers=1,
     persistent_workers=True,
     drop_last=False,
     sampler=dict(type='DefaultSampler', shuffle=False),
-    dataset=test_dataset
+    dataset=train_dataset
 )
+
+test_dataset = train_dataset.copy()
+test_dataset.update(
+    ann_file=VITABSET_TEST_JSON,
+    data_prefix={'img_path': VITABSET_TEST_IMAGE_ROOT},
+    test_mode=True,
+)
+
+test_dataloader = train_dataloader.copy()
+test_dataloader.update(data_set=test_dataset)
+
+val_dataset = train_dataset.copy()
+val_dataset.update(
+    ann_file=VITABSET_VAL_JSON,
+    data_prefix={'img_path': VITABSET_VAL_IMAGE_ROOT},
+    test_mode=False,
+)
+
+val_dataloader = train_dataloader.copy()
+val_dataloader.update(data_set=val_dataset)
+
 # endregion
 # region Model
+start_end_same = False
+alphabet_len = len(open(STRUCTURE_VOCAB_FILE, 'r').readlines())
+if start_end_same:
+    PAD = alphabet_len + 2
+else:
+    PAD = alphabet_len + 3
+
 dictionary = dict(
     type='TableMasterDictionary', # file:///./../models/dictionaries/table_master_dictionary.py
-    dict_file='{{ fileDirname }}/../data/structure_vocab.txt',
+    dict_file=STRUCTURE_VOCAB_FILE,
     with_padding=True,
     with_unknown=True,
     same_start_end=True,
@@ -57,65 +85,62 @@ dictionary = dict(
     with_end=True)
 
 model = dict(
-    type='MASTER',
+    type='TABLEMASTER', # file:///./../models/recognizer/table_master.py
     backbone=dict(
-        type='ResNet',
-        in_channels=3,
-        stem_channels=[64, 128],
-        block_cfgs=dict(
-            type='BasicBlock',
-            plugins=dict(
-                cfg=dict(
-                    type='GCAModule',
-                    ratio=0.0625,
-                    n_head=1,
-                    pooling_type='att',
-                    is_att_scale=False,
-                    fusion_type='channel_add'),
-                position='after_conv2')),
-        arch_layers=[1, 2, 5, 3],
-        arch_channels=[256, 256, 512, 512],
-        strides=[1, 1, 1, 1],
-        plugins=[
-            dict(
-                cfg=dict(type='Maxpool2d', kernel_size=2, stride=(2, 2)),
-                stages=(True, True, False, False),
-                position='before_stage'),
-            dict(
-                cfg=dict(type='Maxpool2d', kernel_size=(2, 1), stride=(2, 1)),
-                stages=(False, False, True, False),
-                position='before_stage'),
-            dict(
-                cfg=dict(
-                    type='ConvModule',
-                    kernel_size=3,
-                    stride=1,
-                    padding=1,
-                    norm_cfg=dict(type='BN'),
-                    act_cfg=dict(type='ReLU')),
-                stages=(True, True, True, True),
-                position='after_stage')
-        ],
-        init_cfg=[
-            dict(type='Kaiming', layer='Conv2d'),
-            dict(type='Constant', val=1, layer='BatchNorm2d'),
-        ]),
-    encoder=None,
-    decoder=dict(
-        type='MasterDecoder',
+        type='TableResNetExtra', # file:///./../models/backbones/table_resnet_extra.py
+        input_dim=3,
+        gcb_config=dict(
+            ratio=0.0625,
+            headers=1,
+            att_scale=False,
+            fusion_type="channel_add",
+            layers=[False, True, True, True],
+        ),
+        layers=[1,2,5,3]
+    ),
+    encoder=dict(
+        type='PositionalEncoding', # file:///./../models/encoders/positional_encoding.py
         d_model=512,
-        n_head=8,
-        attn_drop=0.,
-        ffn_drop=0.,
-        d_inner=2048,
+        dropout=0.2,
+        max_len=5000
+    ),
+    decoder=dict(
+        type='TableMasterConcatDecoder', # file:///./../models/decoders/table_master_concat_decoder.py
         n_layers=3,
-        feat_pe_drop=0.2,
-        feat_size=6 * 40,
-        postprocessor=dict(type='AttentionPostprocessor'),
+        n_heads=8,
+        decoder=dict(
+            self_attn=dict(
+                headers=8,
+                d_model=512,
+                dropout=0.),
+            src_attn=dict(
+                headers=8,
+                d_model=512,
+                dropout=0.),
+            feed_forward=dict(
+                d_model=512,
+                d_ff=2024,
+                dropout=0.),
+            size=512,
+            dropout=0.
+        ),
+        d_model=512,
+        postprocessor=dict(type='TableMasterPostprocessor'), # file:///./../models/postprocessors/table_master_postprocessor.py),
         module_loss=dict(
-            type='CEModuleLoss', reduction='mean', ignore_first_char=True),
-        max_seq_len=30,
-        dictionary=dictionary),
+            type='TableLoss', # file:///./../models/losses/table_loss.py
+            loss_token=dict(
+                type='MASTERTFLoss', # file:///./../models/losses/master_tf_loss.py
+                ignore_index=PAD, 
+                reduction='mean'
+            ),
+            loss_bbox=dict(
+                type='TableL1Loss', # file:///./../models/losses/table_l1_loss.py
+                reduction='sum'
+            ),
+        ),
+        max_seq_len=600,
+        dictionary=dictionary
+    ),
     data_preprocessor=dict(
         type='TextRecogDataPreprocessor',
         mean=[127.5, 127.5, 127.5],
@@ -124,11 +149,16 @@ model = dict(
 
 # region Evaluator
 val_evaluator = dict(
-    type='TEDSMetric',
-    structure_only=False,
-    n_jobs=1,
-    ignore_nodes=None,
-    collect_device='cpu',
-    prefix=None
-)
+    type='MultiDatasetsEvaluator', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/evaluation/evaluator/multi_datasets_evaluator.py
+    metrics=[
+        dict(
+            type='TEDSMetric', # file:///./../models/metrics/teds_metric.py
+            structure_only=True,
+            ignore_nodes=None,
+            collect_device='cpu',
+            prefix=None
+        )
+    ],
+    dataset_prefixes=None)
+test_evaluator = val_evaluator
 # endregion

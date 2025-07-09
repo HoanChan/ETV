@@ -1,118 +1,56 @@
 # Configuration for TableMaster ConcatLayer with TableResNetExtract and Ranger optimizer
-# Compatible with mmOCR 1.0.1 and your local src modules
+# Compatible with mmOCR 1.0.1 and local src modules
 
-_base_ = [
-    './_etv_base.py',
+_base_ = [ # https://mmengine.readthedocs.io/en/latest/advanced_tutorials/config.html#inherit-configuration-files-across-repository
+    'mmocr::textrecog/_base_/default_runtime.py',               # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/default_runtime.py
+    'mmocr::textrecog/_base_/schedules/schedule_adam_base.py',  # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/schedules/schedule_adam_base.py                         
+    '_etv_base.py' # file:///./_etv_base.py
 ]
-
-# Model settings
-model = dict(
-    type='TABLEMASTER',
-    backbone=dict(
-        type='TableResNetExtra',
-        depth=18,
-        init_cfg=dict(type='Pretrained', checkpoint=None),
-        # You can set checkpoint to a pretrained model if available
-    ),
-    encoder=None,  # TableMaster does not use a separate encoder
-    decoder=dict(
-        type='TableMasterConcatDecoder',
-        in_channels=512,
-        num_classes=1200,  # Update according to your dictionary size
-        max_seq_len=600,
-        start_idx=0,
-        padding_idx=1,
-        mask=True,
-        # Add other decoder params if needed
-    ),
-    dictionary=dict(
-        type='TableMasterDictionary',
-        dict_file='src/data/structure_vocab.txt',
-        with_padding=True,
-        with_unknown=True,
-        same_start_end=True,
-        with_start=True,
-        with_end=True,
-    ),
-    loss=dict(
-        type='MasterTFLoss',
-        ignore_index=1,
-        reduction='mean',
-    ),
-    postprocessor=dict(
-        type='TableMasterPostprocessor',
-        max_seq_len=600,
-    ),
-    label_convertor=None,
-)
-
-# Dataset settings
-train_dataloader = dict(
-    batch_size=8,
-    num_workers=4,
-    dataset=dict(
-        type='TableDataset',
-        data_root='data/train/',
-        ann_file='train_ann.json',
-        pipeline=[
-            dict(type='LoadImageFromFile'),
-            dict(type='TableResize', size=(608, 608)),
-            dict(type='PackInputs'),
-        ],
-        dictionary='src/data/structure_vocab.txt',
-    ),
-)
-val_dataloader = dict(
-    batch_size=8,
-    num_workers=2,
-    dataset=dict(
-        type='TableDataset',
-        data_root='data/val/',
-        ann_file='val_ann.json',
-        pipeline=[
-            dict(type='LoadImageFromFile'),
-            dict(type='TableResize', size=(608, 608)),
-            dict(type='PackInputs'),
-        ],
-        dictionary='src/data/structure_vocab.txt',
-    ),
-)
-test_dataloader = val_dataloader
-
-# Evaluation metric
-val_evaluator = dict(
-    type='TEDSMetric',
-    structure_only=False,
-    ignore_case=True,
-    ignore_symbol=True,
-)
 
 # Optimizer
 optim_wrapper = dict(
-    type='OptimWrapper',
+    type='OptimWrapper', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/optimizer/optimizer_wrapper.py
     optimizer=dict(
-        type='Ranger',
+        type='Ranger', # file:///./../optimizer/ranger.py
         lr=0.001,
         weight_decay=0.0,
     ),
-    clip_grad=None,
 )
 
 # Learning policy
 param_scheduler = [
-    dict(type='LinearLR', start_factor=0.1, by_epoch=True, begin=0, end=5),
-    dict(type='CosineAnnealingLR', T_max=95, by_epoch=True, begin=5, end=100),
+    dict(
+        type='LinearLR', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/scheduler/lr_scheduler.py#L121
+        start_factor=0.1, 
+        by_epoch=True, 
+        begin=0, 
+        end=5
+    ),
+    dict(
+        type='CosineAnnealingLR', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/scheduler/lr_scheduler.py#L48
+        T_max=95, 
+        by_epoch=True, 
+        begin=5, 
+        end=100
+    ),
 ]
 
 default_hooks = dict(
-    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=5),
-    logger=dict(type='LoggerHook', interval=50),
+    checkpoint=dict(
+        type='CheckpointHook', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/hooks/checkpoint_hook.py
+        interval=1, 
+        max_keep_ckpts=5
+    ),
+    logger=dict(
+        type='LoggerHook', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/hooks/logger_hook.py
+        interval=50
+    ),
 )
 
 # Runtime settings
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=1)
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=1) # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L21
+val_cfg = dict(type='ValLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L330
+test_cfg = dict(type='TestLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L417
 
 # Custom imports for local src modules
 custom_imports = dict(
