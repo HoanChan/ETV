@@ -7,8 +7,8 @@ TEST_IDS = 400  # Number of tables to test
 NUM_PROCESSES = os.cpu_count()  # One threads per logic core
 
 # Vocabulary files
-STRUCTURE_VOCAB_FILE = os.path.join(DIR_ROOT, 'data', 'structure_vocab.txt')
-CELL_VOCAB_FILE = os.path.join(DIR_ROOT, 'data', 'cell_vocab.txt')
+STRUCTURE_VOCAB_FILE = os.path.join(DIR_ROOT, 'src', 'data', 'structure_vocab.txt')
+CELL_VOCAB_FILE = os.path.join(DIR_ROOT, 'src', 'data', 'cell_vocab.txt')
 
 # PubTabNet dataset paths
 PUBTABNET_ROOT = os.path.join(DATA_ROOT, 'pubtabnet')
