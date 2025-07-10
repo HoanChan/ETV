@@ -9,48 +9,33 @@ _base_ = [ # https://mmengine.readthedocs.io/en/latest/advanced_tutorials/config
 
 # Optimizer
 optim_wrapper = dict(
-    type='OptimWrapper', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/optimizer/optimizer_wrapper.py
+    type='AmpOptimWrapper', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/optimizer/amp_optimizer_wrapper.py#L24
     optimizer=dict(
         type='Ranger', # file:///./../optimizer/ranger.py
         lr=0.001,
         weight_decay=0.0,
     ),
+    grad_clip=dict(max_norm=35, norm_type=2)
 )
 
-# Learning policy
+# learning policy
 param_scheduler = [
+    # Linear warm-up
     dict(
         type='LinearLR', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/scheduler/lr_scheduler.py#L121
-        start_factor=0.1, 
-        by_epoch=True, 
-        begin=0, 
-        end=5
-    ),
+        start_factor=1.0 / 3,
+        by_epoch=False,
+        begin=0,
+        end=50),
+    # Step decay
     dict(
-        type='CosineAnnealingLR', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/scheduler/lr_scheduler.py#L48
-        T_max=95, 
-        by_epoch=True, 
-        begin=5, 
-        end=100
-    ),
+        type='MultiStepLR', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/optim/scheduler/lr_scheduler.py#L150
+        by_epoch=True,
+        milestones=[12, 15],
+        gamma=0.1)
 ]
-
-default_hooks = dict(
-    checkpoint=dict(
-        type='CheckpointHook', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/hooks/checkpoint_hook.py
-        interval=1, 
-        max_keep_ckpts=5
-    ),
-    logger=dict(
-        type='LoggerHook', # https://github.com/open-mmlab/mmengine/blob/main/mmengine/hooks/logger_hook.py
-        interval=50
-    ),
-)
-
 # Runtime settings
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=1) # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L21
-val_cfg = dict(type='ValLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L330
-test_cfg = dict(type='TestLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L417
+train_cfg = dict(max_epochs=17) # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/schedules/schedule_adam_base.py
 # region Evaluator
 val_evaluator = dict(
     type='MultiDatasetsEvaluator', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/evaluation/evaluator/multi_datasets_evaluator.py
@@ -66,6 +51,10 @@ val_evaluator = dict(
     dataset_prefixes=None)
 test_evaluator = val_evaluator
 # endregion
+
+load_from = None  # No pre-trained model
+resume = False  # Do not resume training from a checkpoint
+
 # Custom imports for local src modules
 custom_imports = dict(
     imports=[
