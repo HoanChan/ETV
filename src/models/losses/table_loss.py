@@ -1,12 +1,10 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional, Tuple
-
+from typing import Dict, Union
 import torch
 import torch.nn as nn
-from torch.nn.modules.linear import Linear
-from torch.nn.modules.container import Sequential
 from mmocr.registry import MODELS
-
+from mmocr.registry import TASK_UTILS
+from mmocr.models.common.dictionary import Dictionary
 
 @MODELS.register_module()
 class TableLoss(nn.Module):
@@ -19,10 +17,23 @@ class TableLoss(nn.Module):
         loss_token (dict): Config for text loss module.
         loss_bbox (dict): Config for bbox loss module.
     """
-    def __init__(self, loss_token, loss_bbox):
+    def __init__(self, 
+                 loss_token: dict, 
+                 loss_bbox: dict,
+                 dictionary: Union[Dict, Dictionary],
+                 max_seq_len: int = 40) -> None:
         super().__init__()
         self.loss_token = MODELS.build(loss_token)
         self.loss_bbox = MODELS.build(loss_bbox)
+        if isinstance(dictionary, dict):
+            self.dictionary = TASK_UTILS.build(dictionary)
+        elif isinstance(dictionary, Dictionary):
+            self.dictionary = dictionary
+        else:
+            raise TypeError(
+                'The type of dictionary should be `Dictionary` or dict, '
+                f'but got {type(dictionary)}')
+        self.max_seq_len = max_seq_len
 
     def forward(self, 
                 outputs: tuple[torch.Tensor, torch.Tensor], 
