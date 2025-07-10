@@ -15,7 +15,8 @@
         "--work-dir",
         "work_dirs/etv_concat_resnetex_ranger",
         "--cfg-options",
-        "train_cfg.max_epochs=1"
+        "train_cfg.max_epochs=1",
+        "train_dataloader.dataset.max_data=100"
       ],
       "options": {
         "env": {
