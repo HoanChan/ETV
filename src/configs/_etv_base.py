@@ -26,7 +26,7 @@ data_pipeline = [
         keys=['img'],
         mean=[0.5, 0.5, 0.5],
         std=[0.5, 0.5, 0.5],
-        meta_keys=('filename', 'ori_shape', 'img_shape', 'scale_factor', 'img_norm_cfg', 'ori_filename', 'pad_shape')
+        meta_keys=('filename', 'ori_shape', 'img_shape', 'scale_factor', 'img_norm_cfg', 'ori_filename', 'pad_shape', 'valid_ratio')
     )
 ]
 
