@@ -1,4 +1,11 @@
-from config import *
+VITABSET_TRAIN_IMAGE_ROOT = "F:/data/vitabset/train"
+VITABSET_TRAIN_JSON = "F:/data/vitabset/train.bz2"
+VITABSET_VAL_IMAGE_ROOT = "F:/data/vitabset/val"
+VITABSET_VAL_JSON = "F:/data/vitabset/val.bz2"
+VITABSET_TEST_IMAGE_ROOT = "F:/data/vitabset/test"
+VITABSET_TEST_JSON = "F:/data/vitabset/test.bz2"
+STRUCTURE_VOCAB_FILE = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
+
 # region Dataset
 data_pipeline = [
     dict(type='LoadImageFromFile'), # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
@@ -147,18 +154,3 @@ model = dict(
         std=[127.5, 127.5, 127.5]))
 # endregion
 
-# region Evaluator
-val_evaluator = dict(
-    type='MultiDatasetsEvaluator', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/evaluation/evaluator/multi_datasets_evaluator.py
-    metrics=[
-        dict(
-            type='TEDSMetric', # file:///./../models/metrics/teds_metric.py
-            structure_only=True,
-            ignore_nodes=None,
-            collect_device='cpu',
-            prefix=None
-        )
-    ],
-    dataset_prefixes=None)
-test_evaluator = val_evaluator
-# endregion

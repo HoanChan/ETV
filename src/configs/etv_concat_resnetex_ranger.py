@@ -51,20 +51,35 @@ default_hooks = dict(
 train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=1) # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L21
 val_cfg = dict(type='ValLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L330
 test_cfg = dict(type='TestLoop') # https://github.com/open-mmlab/mmengine/blob/main/mmengine/runner/loops.py#L417
-
+# region Evaluator
+val_evaluator = dict(
+    type='MultiDatasetsEvaluator', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/evaluation/evaluator/multi_datasets_evaluator.py
+    metrics=[
+        dict(
+            type='TEDSMetric', # file:///./../models/metrics/teds_metric.py
+            structure_only=True,
+            ignore_nodes=None,
+            collect_device='cpu',
+            prefix=None
+        )
+    ],
+    dataset_prefixes=None)
+test_evaluator = val_evaluator
+# endregion
 # Custom imports for local src modules
 custom_imports = dict(
     imports=[
-        'src.models.backbones.resnet_extra',
-        'src.models.decoders.table_master_concat_decoder',
-        'src.models.dictionaries.table_master_dictionary',
-        'src.models.losses.master_tf_loss',
-        'src.models.metric.teds_metric',
-        'src.models.postprocessors.table_master_postprocessor',
-        'src.datasets.table_dataset',
-        'src.datasets.transforms.table_resize',
-        'src.datasets.transforms.pack_inputs',
-        'src.optimizer.ranger',
+        'models.backbones.resnet_extra',
+        'models.decoders.table_master_concat_decoder',
+        'models.dictionaries.table_master_dictionary',
+        'models.losses.master_tf_loss',
+        'models.metrics.teds_metric',
+        'models.postprocessors.table_master_postprocessor',
+        'datasets.table_dataset',
+        'datasets.transforms.table_resize',
+        'datasets.transforms.table_pad',
+        'datasets.transforms.pack_inputs',
+        'optimizer.ranger',
     ],
     allow_failed_imports=False,
 )
