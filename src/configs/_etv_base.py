@@ -61,7 +61,7 @@ test_dataset.update(
 )
 
 test_dataloader = train_dataloader.copy()
-test_dataloader.update(data_set=test_dataset)
+test_dataloader.update(dataset=test_dataset)
 
 val_dataset = train_dataset.copy()
 val_dataset.update(
@@ -71,7 +71,7 @@ val_dataset.update(
 )
 
 val_dataloader = train_dataloader.copy()
-val_dataloader.update(data_set=val_dataset)
+val_dataloader.update(dataset=val_dataset)
 
 # endregion
 # region Model
@@ -132,7 +132,7 @@ model = dict(
             dropout=0.
         ),
         d_model=512,
-        postprocessor=dict(type='TableMasterPostprocessor'), # file:///./../models/postprocessors/table_master_postprocessor.py),
+        postprocessor=dict(type='TableStructurePostprocessor'), # file:///./../models/postprocessors/table_structure_postprocessor.py
         module_loss=dict(
             type='TableLoss', # file:///./../models/losses/table_loss.py
             loss_token=dict(
@@ -170,7 +170,7 @@ custom_imports = dict(
         'models.losses.table_l1_loss',
         'models.losses.table_loss',
         'models.metrics.teds_metric',
-        'models.postprocessors.table_master_postprocessor',
+        'models.postprocessors.table_structure_postprocessor',
         'models.recognizer.table_master',
         'optimizer.ranger',
     ],
