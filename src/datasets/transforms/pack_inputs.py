@@ -5,7 +5,7 @@ from mmengine.structures import LabelData
 import torchvision.transforms.functional as TF
 
 from mmocr.registry import TRANSFORMS
-from mmocr.structures import (TextRecogDataSample)
+from structures.token_recog_data_sample import TokenRecogDataSample
 
 @TRANSFORMS.register_module()
 class PackInputs(BaseTransform):
@@ -21,9 +21,7 @@ class PackInputs(BaseTransform):
 
     def __init__(self,
                  keys=(),
-                 meta_keys=(
-                     'img_path', 'ori_shape', 'img_shape', 'pad_shape',
-                     'valid_ratio'),
+                 meta_keys=( 'img_path', 'ori_shape', 'img_shape', 'pad_shape', 'valid_ratio'),
                  mean=None,
                  std=None):
         self.keys = keys
@@ -52,15 +50,14 @@ class PackInputs(BaseTransform):
                 packed_results['img_norm_cfg'] = dict(mean=self.mean, std=self.std)
             packed_results['inputs'] = img
 
-        # Pack annotation (text recog)
-        data_sample = TextRecogDataSample()
-        gt_text = LabelData()
-        if results.get('gt_texts', None):
-            assert len(
-                results['gt_texts']
-            ) == 1, 'Each image sample should have one text annotation only'
-            gt_text.item = results['gt_texts'][0]
-        data_sample.gt_text = gt_text
+        # Pack annotation (token recog)
+        data_sample = TokenRecogDataSample()
+        gt_token = LabelData()
+        tokens = results.get('gt_tokens', [])
+        if tokens:
+            assert len(tokens) == 1, 'Each image sample should have one token annotation only'
+            gt_token.item = tokens[0]
+        data_sample.gt_token = gt_token
 
         # Pack meta info
         img_meta = {}
@@ -74,7 +71,7 @@ class PackInputs(BaseTransform):
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'gt_texts']:
+            if key in results and key not in ['img', 'gt_tokens', 'valid_ratio']:
                 packed_results[key] = results[key]
         return packed_results
 
