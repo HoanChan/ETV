@@ -54,21 +54,3 @@ test_evaluator = val_evaluator
 
 load_from = None  # No pre-trained model
 resume = False  # Do not resume training from a checkpoint
-
-# Custom imports for local src modules
-custom_imports = dict(
-    imports=[
-        'models.backbones.resnet_extra',
-        'models.decoders.table_master_concat_decoder',
-        'models.dictionaries.table_master_dictionary',
-        'models.losses.master_tf_loss',
-        'models.metrics.teds_metric',
-        'models.postprocessors.table_master_postprocessor',
-        'datasets.table_dataset',
-        'datasets.transforms.table_resize',
-        'datasets.transforms.table_pad',
-        'datasets.transforms.pack_inputs',
-        'optimizer.ranger',
-    ],
-    allow_failed_imports=False,
-)

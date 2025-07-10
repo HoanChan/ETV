@@ -114,7 +114,7 @@ model = dict(
     decoder=dict(
         type='TableMasterConcatDecoder', # file:///./../models/decoders/table_master_concat_decoder.py
         n_layers=3,
-        n_heads=8,
+        n_head=8,
         decoder=dict(
             self_attn=dict(
                 headers=8,
@@ -154,3 +154,26 @@ model = dict(
         std=[127.5, 127.5, 127.5]))
 # endregion
 
+# region Imports
+custom_imports = dict(
+    imports=[
+        'datasets.table_dataset',
+        'datasets.transforms.pack_inputs',
+        'datasets.transforms.table_pad',
+        'datasets.transforms.table_resize',
+        'models.backbones.resnet_extra',
+        'models.backbones.table_resnet_extra',
+        'models.decoders.table_master_concat_decoder',
+        'models.dictionaries.table_master_dictionary',
+        'models.encoders.positional_encoding',
+        'models.losses.master_tf_loss',
+        'models.losses.table_l1_loss',
+        'models.losses.table_loss',
+        'models.metrics.teds_metric',
+        'models.postprocessors.table_master_postprocessor',
+        'models.recognizer.table_master',
+        'optimizer.ranger',
+    ],
+    allow_failed_imports=False,
+)
+# endregion
