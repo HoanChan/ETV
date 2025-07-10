@@ -15,7 +15,7 @@ optim_wrapper = dict(
         lr=0.001,
         weight_decay=0.0,
     ),
-    grad_clip=dict(max_norm=35, norm_type=2)
+    clip_grad=dict(max_norm=35, norm_type=2)
 )
 
 # learning policy
