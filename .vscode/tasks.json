@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test Train MMOCR",
+      "type": "shell",
+      "command": "conda",
+      "args": [
+        "run",
+        "-n",
+        "etv",
+        "python",
+        "tools/train.py",
+        "src/configs/etv_concat_resnetex_ranger.py",
+        "--work-dir",
+        "work_dirs/etv_concat_resnetex_ranger",
+        "--cfg-options",
+        "train_cfg.max_epochs=1"
+      ],
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        },
+      },
+      "group": {
+        "kind": "build"
+      }
+    }
+  ]
+}
