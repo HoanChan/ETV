@@ -47,6 +47,7 @@ class PackInputs(BaseTransform):
                 img = to_tensor(img)
             # Normalize if mean and std are provided
             if self.mean is not None and self.std is not None:
+                img = img.float()  # Ensure tensor is float before normalization
                 img = TF.normalize(img, self.mean, self.std)
                 packed_results['img_norm_cfg'] = dict(mean=self.mean, std=self.std)
             packed_results['inputs'] = img
