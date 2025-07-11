@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
-from datasets.transforms.bbox_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums
+from datasets.transforms.transforms_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums
 
 @TRANSFORMS.register_module()
 class LoadTokens(BaseTransform):
@@ -43,8 +43,8 @@ class LoadTokens(BaseTransform):
             'img': ...  # original table image
             'instances': [
                 {
-                    'tokens': [...], 
-                    'task_type': 'structure' or 'content',
+                    'tokens': [...],     # list of tokens for the instance (table or cell)
+                    'task_type': ...     # 'structure' or 'content',
                     'cell_id': ...,      # only for content
                     'bbox': [...],       # only for content
                     'img': ...           # only for content if already cropped
