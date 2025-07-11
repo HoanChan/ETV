@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from mmcv.transforms.base import BaseTransform
 from mmocr.registry import TRANSFORMS
-from .bbox_utils import xyxy2xywh, normalize_bbox, xywh2xyxy
+from .transforms_utils import xyxy2xywh, normalize_bbox, xywh2xyxy
 
 
 @TRANSFORMS.register_module()
