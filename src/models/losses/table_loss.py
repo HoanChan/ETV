@@ -3,9 +3,9 @@ from typing import Dict, Union, Sequence
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
-from mmocr.registry import TASK_UTILS
 from mmocr.models.common.dictionary import Dictionary
 from mmocr.models.textrecog.module_losses.base import BaseTextRecogModuleLoss
+from structures.token_recog_data_sample import TokenRecogDataSample
 
 @MODELS.register_module()
 class TableLoss(BaseTextRecogModuleLoss):
@@ -32,10 +32,7 @@ class TableLoss(BaseTextRecogModuleLoss):
         self.loss_token = MODELS.build(loss_token)
         self.loss_bbox = MODELS.build(loss_bbox)
 
-    def forward(self, 
-                outputs: tuple[torch.Tensor, torch.Tensor], 
-                data_samples: list, 
-                **kwargs) -> Dict[str, torch.Tensor]:
+    def forward(self, outputs: tuple[torch.Tensor, torch.Tensor], data_samples: list[TokenRecogDataSample], **kwargs) -> Dict[str, torch.Tensor]:
         """Forward function to compute composite loss.
         
         Args:
@@ -50,34 +47,26 @@ class TableLoss(BaseTextRecogModuleLoss):
         data_samples = self.get_targets(data_samples)
         
         # Extract processed token targets (padded_indexes for loss computation)
-        gt_tokens = []
-        for s in data_samples:
-            if hasattr(s.gt_token, 'padded_indexes'):
-                gt_tokens.append(s.gt_token.padded_indexes)
-            else:
-                # Fallback to raw gt_token if not processed
-                gt_tokens.append(s.gt_token)
-        
-        gt_bboxes = [s.gt_bbox for s in data_samples]
+        gt_tokens = [getattr(s.gt_tokens, 'padded_indexes', s.gt_tokens) for s in data_samples]
+        gt_bboxes = [s.gt_bboxs for s in data_samples]
 
         loss1 = self.loss_token(outputs[0], gt_tokens)
         loss2 = self.loss_bbox(outputs[1], gt_bboxes)
         return dict(loss_token=loss1, loss_bbox=loss2)
 
-    def get_targets(self, 
-                    data_samples: Sequence) -> Sequence:
+    def get_targets(self, data_samples: Sequence[TokenRecogDataSample]) -> Sequence[TokenRecogDataSample]:
         """Target generator for table structure recognition.
         
         Override base class method to handle tokens instead of characters.
         The base class processes gt_text.item character by character using str2idx,
-        but TableLoss expects gt_token which contains pre-processed token sequences.
+        but TableLoss expects gt_tokens which contains pre-processed token sequences.
 
         Args:
-            data_samples (list): It usually includes ``gt_token`` and ``gt_bbox`` 
+            data_samples (list): It usually includes ``gt_tokens`` and ``gt_bboxs`` 
                 information for table structure recognition.
 
         Returns:
-            list: Updated data_samples. For gt_token, two keys will be added:
+            list: Updated data_samples. For gt_tokens, two keys will be added:
 
             - indexes (torch.LongTensor): Token indexes representing gt tokens.
               All special tokens are excluded, except for UKN.
@@ -88,23 +77,22 @@ class TableLoss(BaseTextRecogModuleLoss):
         for data_sample in data_samples:
             if data_sample.get('have_target', False):
                 continue
-            
-            # gt_token should already be token indices, not strings
-            if isinstance(data_sample.gt_token, torch.Tensor):
+
+            # gt_tokens should already be token indices, not strings
+            if isinstance(data_sample.gt_tokens, torch.Tensor):
                 # If already tensor, squeeze to 1D and convert to list for processing
-                tokens = data_sample.gt_token.squeeze().tolist()
+                tokens = data_sample.gt_tokens.squeeze().tolist()
                 if isinstance(tokens, int):  # Single token case
                     tokens = [tokens]
-            elif isinstance(data_sample.gt_token, (list, tuple)):
+            elif isinstance(data_sample.gt_tokens, (list, tuple)):
                 # If list/tuple of token indices
-                tokens = list(data_sample.gt_token)
+                tokens = list(data_sample.gt_tokens)
             else:
                 # If it's a string of tokens (comma-separated), convert to indices
-                tokens = self.dictionary.str2idx(str(data_sample.gt_token))
-            
+                tokens = self.dictionary.str2idx(str(data_sample.gt_tokens))
+
             indexes = torch.LongTensor(tokens)
-            
-            # Create target sequence with start/end tokens  
+            # Create target sequence with start/end tokens
             src_target = torch.LongTensor(indexes.size(0) + 2).fill_(0)
             src_target[1:-1] = indexes
             
@@ -129,11 +117,11 @@ class TableLoss(BaseTextRecogModuleLoss):
                 padded_indexes[:char_num] = src_target[:char_num]
             else:
                 padded_indexes = src_target
-            
-            # Store processed targets in gt_token object
-            data_sample.gt_token.indexes = indexes
-            data_sample.gt_token.padded_indexes = padded_indexes
-            
+
+            # Store processed targets in gt_tokens object
+            data_sample.gt_tokens.indexes = indexes
+            data_sample.gt_tokens.padded_indexes = padded_indexes
+
             # Mark as processed
             data_sample.set_metainfo(dict(have_target=True))
             
