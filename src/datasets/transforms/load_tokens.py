@@ -3,41 +3,47 @@ from typing import Optional
 import numpy as np
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
+from datasets.transforms.bbox_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask
 
 @TRANSFORMS.register_module()
 class LoadTokens(BaseTransform):
     """
     Load and process token annotations from table dataset instances.
-    
-    - If with_structure: returns 'img' (table image) and 'gt_tokens' (list of structure tokens).
-    - If with_cell: returns 'gt_cells' as a list of dicts, each dict contains:
+
+    - If with_structure: returns 
+        + 'tokens': list of structure tokens.
+        + 'bboxes': list of all token bboxes (calculated from structure tokens and cell bboxes).
+        + 'masks': mask for bboxes (1 for valid bbox, 0 for empty bbox).
+
+    - If with_cell: returns 'cells' as a list of dicts, each dict contains:
         {
-            'img': ...,        # cell image
-            'gt_tokens': ...,  # list of tokens for the cell
-            'gt_bbox': ...,    # bbox of the cell
-            'id': ...          # id of the cell
+            'tokens': ...,    # list of tokens for the cell
+            'bboxes': ...,    # bboxes of the cell (one bbox)
+            'id': ...         # id of the cell
         }
 
-    Full output annotation format:
+    Full output annotation format (if with_structure and with_cell):
         {
-            'gt_tokens': [...],  # list of structure tokens if with_structure
-            'gt_cells': [        # list of cell information if with_cell
+            'img': ...        # original table image
+            'tokens': [...],  # list of structure tokens if with_structure
+            'bboxes': [...],  # list of all token bboxes if with_structure
+            'masks': [...],   # list of all masks for bboxes if with_structure
+            'cells': [        # list of cell information if with_cell
                 {
-                    'img': ...,        # cell image
-                    'gt_tokens': ...,  # list of tokens for the cell
-                    'gt_bbox': ...,    # bbox of the cell
-                    'id': ...          # id of the cell
+                    'tokens': ...,    # list of tokens for the cell
+                    'bboxes': ...,    # bboxes of the cell (one bbox)
+                    'id': ...         # id of the cell
                 }
                 ...
             ],
-            'img': ...           # original table image
         }
-    
+
     Input annotation format:
         {
+            'img': ...  # original table image
             'instances': [
                 {
-                    'tokens': [...],
+                    'tokens': [...], 
                     'task_type': 'structure' or 'content',
                     'cell_id': ...,      # only for content
                     'bbox': [...],       # only for content
@@ -45,12 +51,11 @@ class LoadTokens(BaseTransform):
                 },
                 ...
             ],
-            'img': ...  # original table image
         }
 
     Args:
-        with_structure (bool): Whether to load structure tokens. If True, will return 'img' and 'gt_tokens'.
-        with_cell (bool): Whether to load cell tokens. If True, will return 'gt_cells'.
+        with_structure (bool): Whether to load structure tokens. If True, will return 'img', 'tokens', 'bboxes', 'masks'.
+        with_cell (bool): Whether to load cell tokens. If True, will return 'cells'.
         max_structure_token_len (int, optional): Limit the number of structure tokens.
         max_cell_token_len (int, optional): Limit the number of cell tokens.
     """
@@ -71,15 +76,35 @@ class LoadTokens(BaseTransform):
     def transform(self, results: dict) -> dict:
         """
         Load token annotations for structure or cell.
-        - If with_structure: returns 'img' and 'gt_tokens'.
-        - If with_cell: returns 'gt_cells' as a list of dicts.
+        - If with_structure: returns 'img' and 'tokens'.
+        - If with_cell: returns 'cells' as a list of dicts and 'bboxes' as a list of bboxes.
         """
         if 'instances' not in results:
             if self.with_structure:
-                results['gt_tokens'] = []
+                results['tokens'] = []
+                results['bboxes'] = []
             if self.with_cell:
-                results['gt_cells'] = []
+                results['cells'] = []
             return results
+        
+        bboxes = []
+        if self.with_cell:
+            # Get information for each cell
+            cells = []
+            for instance in results['instances']:
+                if instance.get('task_type') == 'content':
+                    tokens = instance.get('tokens', [])
+                    if self.max_cell_token_len is not None:
+                        tokens = tokens[:self.max_cell_token_len]
+                    bbox = instance.get('bbox', [0, 0, 0, 0])
+                    cell_id = instance.get('cell_id', 0)
+                    cells.append({
+                        'tokens': tokens,
+                        'bboxes': [bbox],
+                        'id': cell_id
+                    })
+                    bboxes.append(bbox)
+            results['cells'] = cells
 
         if self.with_structure:
             # Get structure tokens
@@ -90,27 +115,16 @@ class LoadTokens(BaseTransform):
                     if self.max_structure_token_len is not None:
                         tokens = tokens[:self.max_structure_token_len]
                     structure_tokens.extend(tokens)
-            results['gt_tokens'] = structure_tokens
+            results['tokens'] = structure_tokens
+            # Advanced bbox parsing
+            empty_bbox_mask = build_empty_bbox_mask(bboxes)
+            aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
+            empty_bbox_mask = np.array(empty_bbox_mask)
+            bbox_masks = build_bbox_mask(structure_tokens)
+            bbox_masks = bbox_masks * empty_bbox_mask
+            results['bboxes'] = np.array(aligned_bboxes)
+            results['masks'] = bbox_masks
             # Keep 'img' as the original table image
-
-        if self.with_cell:
-            # Get information for each cell
-            gt_cells = []
-            for instance in results['instances']:
-                if instance.get('task_type') == 'content':
-                    tokens = instance.get('tokens', [])
-                    if self.max_cell_token_len is not None:
-                        tokens = tokens[:self.max_cell_token_len]
-                    cell_img = instance.get('img', None)  # May be None if not cropped yet
-                    bbox = instance.get('bbox', [0, 0, 0, 0])
-                    cell_id = instance.get('cell_id', 0)
-                    gt_cells.append({
-                        'img': cell_img,
-                        'gt_tokens': tokens,
-                        'gt_bbox': bbox,
-                        'id': cell_id
-                    })
-            results['gt_cells'] = gt_cells
         return results
 
     def __repr__(self) -> str:
