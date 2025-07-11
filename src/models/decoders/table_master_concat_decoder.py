@@ -1,14 +1,55 @@
-from typing import Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 import torch
+import torch.nn as nn
 from mmocr.registry import MODELS
+from mmocr.models.common.dictionary import Dictionary
 from .table_master_decoder import TableMasterDecoder
 
 @MODELS.register_module()
 class TableMasterConcatDecoder(TableMasterDecoder):
     """TableMaster Concat Decoder module.
     This version concatenates the outputs from multiple layers for classification and bbox heads.
-    Inherits all logic from TableMasterDecoder except for the decode method.
+    Inherits all logic from TableMasterDecoder except for the decode method and fully connected layers.
     """
+
+    def __init__(
+        self,
+        n_layers: int = 3,
+        n_head: int = 8,
+        d_model: int = 512,
+        decoder: Optional[Dict] = None,
+        module_loss: Optional[Dict] = None,
+        postprocessor: Optional[Dict] = None,
+        dictionary: Optional[Union[Dict, Dictionary]] = None,
+        max_seq_len: int = 30,
+        init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
+    ):
+        # Initialize parent class first
+        super().__init__(
+            n_layers=n_layers,
+            n_head=n_head,
+            d_model=d_model,
+            decoder=decoder,
+            module_loss=module_loss,
+            postprocessor=postprocessor,
+            dictionary=dictionary,
+            max_seq_len=max_seq_len,
+            init_cfg=init_cfg,
+        )
+        
+        # Override classification and bbox heads for concatenation
+        # For concat version, we concatenate one layer output (so concat_dim = d_model * 1 = d_model)
+        # If you have multiple layers to concatenate, adjust accordingly
+        concat_dim = d_model
+        
+        # Classification head (adjusted for concatenation)
+        self.cls_fc = nn.Linear(concat_dim, self.dictionary.num_classes)
+        
+        # Bbox regression head (adjusted for concatenation)
+        self.bbox_fc = nn.Sequential(
+            nn.Linear(concat_dim, 4),
+            nn.Sigmoid()
+        )
 
     def decode(self, tgt_seq: torch.Tensor, feature: torch.Tensor,
                src_mask: torch.BoolTensor,
