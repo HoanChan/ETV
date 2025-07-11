@@ -11,12 +11,19 @@ from structures.token_recog_data_sample import TokenRecogDataSample
 class PackInputs(BaseTransform):
     """Pack the inputs data for text recognition or other tasks, collecting flexible keys.
 
+    requires keys:
+        - 'img': the input image tensor.
+        - 'gt_tokens': list of tokens for text recognition.
+
+    optional keys:
+        - 'valid_ratio': ratio of valid pixels in the image. Defaults to 1 if not found.
+
     Args:
         keys (Sequence[str]): Keys of results to be collected in output (besides image and annotation).
         meta_keys (Sequence[str], optional): Meta keys to be converted to metainfo. Defaults to
             ('img_path', 'ori_shape', 'img_shape', 'pad_shape', 'valid_ratio').
-        mean (Sequence[float], optional): Mean values for each channel for normalization.
-        std (Sequence[float], optional): Std values for each channel for normalization.
+        mean (Sequence[float], optional): Mean values for each channel for image normalization.
+        std (Sequence[float], optional): Std values for each channel for image normalization.
     """
 
     def __init__(self,
@@ -55,8 +62,9 @@ class PackInputs(BaseTransform):
         gt_token = LabelData()
         tokens = results.get('gt_tokens', [])
         if tokens:
-            assert len(tokens) == 1, 'Each image sample should have one token annotation only'
-            gt_token.item = tokens[0]
+            assert isinstance(tokens, list), "gt_tokens should be a list of tokens."
+            assert all(isinstance(token, str) for token in tokens), "All tokens in gt_tokens should be strings."
+            gt_token.item = tokens
         data_sample.gt_token = gt_token
 
         # Pack meta info
