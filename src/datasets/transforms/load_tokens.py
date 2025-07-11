@@ -87,23 +87,24 @@ class LoadTokens(BaseTransform):
                 results['cells'] = []
             return results
         
+        # Get information for each cell
+        cells = []
         bboxes = []
+        for instance in results['instances']:
+            if instance.get('task_type') == 'content':
+                tokens = instance.get('tokens', [])
+                if self.max_cell_token_len is not None:
+                    tokens = tokens[:self.max_cell_token_len]
+                bbox = instance.get('bbox', [0, 0, 0, 0])
+                cell_id = instance.get('cell_id', 0)
+                cells.append({
+                    'tokens': tokens,
+                    'bboxes': [bbox],
+                    'id': cell_id
+                })
+                bboxes.append(bbox)
+
         if self.with_cell:
-            # Get information for each cell
-            cells = []
-            for instance in results['instances']:
-                if instance.get('task_type') == 'content':
-                    tokens = instance.get('tokens', [])
-                    if self.max_cell_token_len is not None:
-                        tokens = tokens[:self.max_cell_token_len]
-                    bbox = instance.get('bbox', [0, 0, 0, 0])
-                    cell_id = instance.get('cell_id', 0)
-                    cells.append({
-                        'tokens': tokens,
-                        'bboxes': [bbox],
-                        'id': cell_id
-                    })
-                    bboxes.append(bbox)
             results['cells'] = cells
 
         if self.with_structure:

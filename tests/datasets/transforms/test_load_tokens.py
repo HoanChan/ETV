@@ -1,8 +1,67 @@
-"""Test suite for LoadTokens transform."""
-
-import pytest
 import numpy as np
+import pytest
 from datasets.transforms.load_tokens import LoadTokens
+
+def make_instances(structure_tokens, cell_tokens_list, bboxes):
+    instances = []
+    if structure_tokens:
+        instances.append({
+            'tokens': structure_tokens,
+            'task_type': 'structure',
+        })
+    for i, (tokens, bbox) in enumerate(zip(cell_tokens_list, bboxes)):
+        instances.append({
+            'tokens': tokens,
+            'task_type': 'content',
+            'cell_id': i,
+            'bbox': bbox,
+        })
+    return instances
+
+@pytest.mark.parametrize(
+    "structure_tokens,cell_tokens_list,bboxes",
+    [
+        # Basic 2 cell, 4 structure tokens
+        (["<td></td>", "<td", ' rowspan="2">', "</td>"], [["a"], ["b"]], [[1,2,3,4], [5,6,7,8]]),
+        # 4 Cell, 8 structure tokens
+        (["<tr>", "<td></td>" , "<td></td>", "</tr>", "<tr>", "<td></td>" , "<td></td>", "</tr>"], [["a"], ["b"], ["c"], ["d"]], [[1,2,3,4], [5,6,7,8], [9,10,11,12], [13,14,15,16]]),
+    ]
+)
+def test_with_and_without_cells(structure_tokens, cell_tokens_list, bboxes):
+    results = {'img': 'fake_img', 'instances': make_instances(structure_tokens, cell_tokens_list, bboxes)}
+
+    # Case 1: with_structure=True, with_cell=True
+    loader = LoadTokens(with_structure=True, with_cell=True)
+    out = loader.transform(results.copy())
+    assert 'tokens' in out
+    assert 'bboxes' in out
+    assert 'masks' in out
+    assert isinstance(out['bboxes'], np.ndarray)
+    assert isinstance(out['masks'], np.ndarray)
+    if cell_tokens_list:
+        assert 'cells' in out
+        assert all(isinstance(cell, dict) for cell in out['cells'])
+        assert len(out['cells']) == len(cell_tokens_list)
+    else:
+        assert 'cells' in out and len(out['cells']) == 0
+    assert len(out['tokens']) == len(structure_tokens)
+    assert out['bboxes'].shape[0] == (len(structure_tokens) if structure_tokens else 0)
+    assert out['masks'].shape[0] == (len(structure_tokens) if structure_tokens else 0)
+
+    # Case 2: with_structure=True, with_cell=False
+    loader2 = LoadTokens(with_structure=True, with_cell=False)
+    out2 = loader2.transform(results.copy())
+    assert 'tokens' in out2 and 'bboxes' in out2 and 'masks' in out2
+    assert isinstance(out2['bboxes'], np.ndarray)
+    assert isinstance(out2['masks'], np.ndarray)
+    assert 'cells' not in out2
+    assert len(out2['tokens']) == len(structure_tokens)
+    assert out2['bboxes'].shape[0] == (len(structure_tokens) if structure_tokens else 0)
+    assert out2['masks'].shape[0] == (len(structure_tokens) if structure_tokens else 0)
+
+    # bboxes and masks must be the same in both cases
+    np.testing.assert_array_equal(out['bboxes'], out2['bboxes'])
+    np.testing.assert_array_equal(out['masks'], out2['masks'])
 
 @pytest.fixture
 def sample_data():
@@ -68,15 +127,25 @@ def test_initialization_with_limits(max_structure_token_len, max_cell_token_len)
 def test_load_structure_only(sample_data):
     """Test loading structure tokens only."""
     transform = LoadTokens(with_structure=True, with_cell=False)
-    result = transform(sample_data.copy())
-    
+    # Use make_instances to generate the same structure as sample_data
+    structure_tokens = ['<thead>', '<tr>', '<td>', 'Cell 1', '</td>', '<td>', 'Cell 2', '</td>', '</tr>', '</thead>']
+    cell_tokens_list = [['Hello', 'World'], ['Test', 'Cell']]
+    bboxes = [[10, 20, 100, 50], [110, 20, 200, 50]]
+    data = {
+        'img': 'mock_image_data',
+        'img_path': 'test_image.jpg',
+        'sample_idx': 0,
+        'instances': make_instances(structure_tokens, cell_tokens_list, bboxes)
+    }
+    result = transform(data.copy())
+
     assert 'tokens' in result
-    expected_tokens = ['<thead>', '<tr>', '<td>', 'Cell 1', '</td>', '<td>', 'Cell 2', '</td>', '</tr>', '</thead>']
+    expected_tokens = structure_tokens
     assert result['tokens'] == expected_tokens
     assert 'bboxes' in result
     assert 'masks' in result
     assert 'cells' not in result
-    
+
     # Check that bboxes and masks are numpy arrays
     assert isinstance(result['bboxes'], np.ndarray)
     assert isinstance(result['masks'], np.ndarray)
@@ -84,21 +153,30 @@ def test_load_structure_only(sample_data):
 def test_load_cell_only(sample_data):
     """Test loading cell tokens only."""
     transform = LoadTokens(with_structure=False, with_cell=True)
-    result = transform(sample_data.copy())
-    
+    structure_tokens = ['<thead>', '<tr>', '<td>', 'Cell 1', '</td>', '<td>', 'Cell 2', '</td>', '</tr>', '</thead>']
+    cell_tokens_list = [['Hello', 'World'], ['Test', 'Cell']]
+    bboxes = [[10, 20, 100, 50], [110, 20, 200, 50]]
+    data = {
+        'img': 'mock_image_data',
+        'img_path': 'test_image.jpg',
+        'sample_idx': 0,
+        'instances': make_instances(structure_tokens, cell_tokens_list, bboxes)
+    }
+    result = transform(data.copy())
+
     assert 'cells' in result
     assert len(result['cells']) == 2
-    
+
     # Check first cell
     assert result['cells'][0]['tokens'] == ['Hello', 'World']
     assert result['cells'][0]['bboxes'] == [[10, 20, 100, 50]]
     assert result['cells'][0]['id'] == 0
-    
+
     # Check second cell
     assert result['cells'][1]['tokens'] == ['Test', 'Cell']
     assert result['cells'][1]['bboxes'] == [[110, 20, 200, 50]]
     assert result['cells'][1]['id'] == 1
-    
+
     # These should not be present when with_structure=False
     assert 'tokens' not in result
     assert 'bboxes' not in result
@@ -107,16 +185,25 @@ def test_load_cell_only(sample_data):
 def test_load_both_structure_and_cell(sample_data):
     """Test loading both structure and cell tokens."""
     transform = LoadTokens(with_structure=True, with_cell=True)
-    result = transform(sample_data.copy())
-    
+    structure_tokens = ['<thead>', '<tr>', '<td>', 'Cell 1', '</td>', '<td>', 'Cell 2', '</td>', '</tr>', '</thead>']
+    cell_tokens_list = [['Hello', 'World'], ['Test', 'Cell']]
+    bboxes = [[10, 20, 100, 50], [110, 20, 200, 50]]
+    data = {
+        'img': 'mock_image_data',
+        'img_path': 'test_image.jpg',
+        'sample_idx': 0,
+        'instances': make_instances(structure_tokens, cell_tokens_list, bboxes)
+    }
+    result = transform(data.copy())
+
     # Check structure tokens
-    expected_structure = ['<thead>', '<tr>', '<td>', 'Cell 1', '</td>', '<td>', 'Cell 2', '</td>', '</tr>', '</thead>']
+    expected_structure = structure_tokens
     assert result['tokens'] == expected_structure
     assert 'bboxes' in result
     assert 'masks' in result
     assert isinstance(result['bboxes'], np.ndarray)
     assert isinstance(result['masks'], np.ndarray)
-    
+
     # Check cell tokens
     assert 'cells' in result
     assert len(result['cells']) == 2
