@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
-from datasets.transforms.bbox_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask
+from datasets.transforms.bbox_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums
 
 @TRANSFORMS.register_module()
 class LoadTokens(BaseTransform):
@@ -116,14 +116,19 @@ class LoadTokens(BaseTransform):
                         tokens = tokens[:self.max_structure_token_len]
                     structure_tokens.extend(tokens)
             results['tokens'] = structure_tokens
-            # Advanced bbox parsing
-            empty_bbox_mask = build_empty_bbox_mask(bboxes)
-            aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
-            empty_bbox_mask = np.array(empty_bbox_mask)
-            bbox_masks = build_bbox_mask(structure_tokens)
-            bbox_masks = bbox_masks * empty_bbox_mask
-            results['bboxes'] = np.array(aligned_bboxes)
-            results['masks'] = bbox_masks
+            
+            # Advanced bbox parsing - only if we have structure tokens and matching bboxes
+            if structure_tokens and bboxes and len(bboxes) == get_bbox_nums(structure_tokens):
+                empty_bbox_mask = build_empty_bbox_mask(bboxes)
+                aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
+                empty_bbox_mask = np.array(empty_bbox_mask)
+                bbox_masks = build_bbox_mask(structure_tokens)
+                bbox_masks = bbox_masks * empty_bbox_mask
+                results['bboxes'] = np.array(aligned_bboxes)
+                results['masks'] = bbox_masks
+            else: # No structure tokens or bboxes or matching count, return empty arrays
+                results['bboxes'] = np.array([])
+                results['masks'] = np.array([])
             # Keep 'img' as the original table image
         return results
 
