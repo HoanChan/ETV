@@ -4,11 +4,12 @@ import torch
 import torch.nn as nn
 from mmengine.model import ModuleList
 from mmocr.registry import MODELS
-from mmocr.structures import TextRecogDataSample
 from mmocr.models.common.dictionary import Dictionary
 from mmocr.models.common.modules import PositionalEncoding
 from mmocr.models.textrecog.decoders.base import BaseDecoder
 from mmocr.models.textrecog.decoders.master_decoder import Embeddings
+
+from structures.token_recog_data_sample import TokenRecogDataSample
 from ..layers.tmd_layer import TMDLayer
 
 @MODELS.register_module()
@@ -25,7 +26,7 @@ class TableMasterDecoder(BaseDecoder):
         d_model (int): Dimension of the input from previous model.
             Defaults to 512.
         decoder (dict, optional): Config dict for decoder layers. Should contain keys:
-            'feat_size', 'd_inner', 'attn_drop', 'ffn_drop'.
+            'd_inner', 'attn_drop', 'ffn_drop'.
         module_loss (dict, optional): Config to build module_loss. Defaults
             to None.
         postprocessor (dict, optional): Config to build postprocessor.
@@ -53,14 +54,12 @@ class TableMasterDecoder(BaseDecoder):
             d_model (int): Dimension of the input from previous model.
                 Defaults to 512.
             decoder (dict, optional): Config dict for decoder layers. Should contain keys:
-                'feat_size', 'd_inner', 'attn_drop', 'ffn_drop'.
+                'd_inner', 'attn_drop', 'ffn_drop'.
         """
         decoder = decoder or {}
-        feat_size = decoder.get('feat_size', 6 * 40)
         d_inner = decoder.get('d_inner', 2048)
         attn_drop = decoder.get('attn_drop', 0.)
         ffn_drop = decoder.get('ffn_drop', 0.)
-        feat_pe_drop = decoder.get('feat_pe_drop', 0.2)
 
         super().__init__(
             module_loss=module_loss,
@@ -96,13 +95,11 @@ class TableMasterDecoder(BaseDecoder):
         self.SOS = self.dictionary.start_idx
         self.PAD = self.dictionary.padding_idx
         self.max_seq_len = max_seq_len
-        self.feat_size = feat_size
         self.n_head = n_head
 
         self.embedding = Embeddings(d_model=d_model, vocab=self.dictionary.num_classes)
 
         self.positional_encoding = PositionalEncoding(d_hid=d_model, n_position=self.max_seq_len + 1)
-        self.feat_positional_encoding = PositionalEncoding(d_hid=d_model, n_position=self.feat_size, dropout=feat_pe_drop)
         
         self.norm = nn.LayerNorm(d_model)
         self.softmax = nn.Softmax(dim=-1)
@@ -174,73 +171,73 @@ class TableMasterDecoder(BaseDecoder):
     def forward_train(self,
                       feat: Optional[torch.Tensor] = None,
                       out_enc: torch.Tensor = None,
-                      data_samples: Sequence[TextRecogDataSample] = None
+                      data_samples: Sequence[TokenRecogDataSample] = None
                       ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward for training. Source mask will not be used here.
 
         Args:
             feat (Tensor, optional): Input feature map from backbone.
-            out_enc (Tensor): Unused.
-            data_samples (list[TextRecogDataSample]): Batch of
-                TextRecogDataSample, containing gt_text and valid_ratio
+            out_enc (Tensor): Feature from encoder with positional encoding applied.
+            data_samples (list[TokenRecogDataSample]): Batch of
+                TokenRecogDataSample, containing gt_token and valid_ratio
                 information.
 
         Returns:
             Tuple[Tensor, Tensor]: The raw classification and bbox logit tensors.
             Shape (N, T, C) where C is num_classes and (N, T, 4) for bbox.
         """
-        # flatten 2D feature map
-        if len(feat.shape) > 3:
-            b, c, h, w = feat.shape
-            feat = feat.view(b, c, h * w)
-            feat = feat.permute((0, 2, 1))
-        feat = self.feat_positional_encoding(feat)
+        # Use out_enc if provided (feature with positional encoding from encoder)
+        # Otherwise use feat directly (similar to original mmOCR 0.x)
+        if out_enc is not None:
+            feature = out_enc
+        else:
+            feature = feat
 
         trg_seq = []
         for target in data_samples:
-            trg_seq.append(target.gt_text.padded_indexes.to(feat.device))
+            trg_seq.append(target.gt_token.padded_indexes.to(feature.device))
 
         trg_seq = torch.stack(trg_seq, dim=0)
 
         src_mask = None
-        tgt_mask = self.make_target_mask(trg_seq, device=feat.device)
-        return self.decode(trg_seq, feat, src_mask, tgt_mask)
+        tgt_mask = self.make_target_mask(trg_seq, device=feature.device)
+        return self.decode(trg_seq, feature, src_mask, tgt_mask)
 
     def forward_test(self,
                      feat: Optional[torch.Tensor] = None,
                      out_enc: torch.Tensor = None,
-                     data_samples: Sequence[TextRecogDataSample] = None
+                     data_samples: Sequence[TokenRecogDataSample] = None
                      ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward for testing.
 
         Args:
             feat (Tensor, optional): Input feature map from backbone.
-            out_enc (Tensor): Unused.
-            data_samples (list[TextRecogDataSample]): Unused.
+            out_enc (Tensor): Feature from encoder with positional encoding applied.
+            data_samples (list[TokenRecogDataSample]): Unused.
 
         Returns:
             Tuple[Tensor, Tensor]: Character probabilities and bbox outputs.
             Shape (N, self.max_seq_len, C) where C is num_classes
             and (N, self.max_seq_len, 4) for bbox.
         """
-        # flatten 2D feature map
-        if len(feat.shape) > 3:
-            b, c, h, w = feat.shape
-            feat = feat.view(b, c, h * w)
-            feat = feat.permute((0, 2, 1))
-        feat = self.feat_positional_encoding(feat)
+        # Use out_enc if provided (feature with positional encoding from encoder)
+        # Otherwise use feat directly (similar to original mmOCR 0.x)
+        if out_enc is not None:
+            feature = out_enc
+        else:
+            feature = feat
 
-        N = feat.shape[0]
+        N = feature.shape[0]
         input = torch.full((N, 1),
                            self.SOS,
-                           device=feat.device,
+                           device=feature.device,
                            dtype=torch.long)
         cls_output = None
         bbox_output = None
         
         for _ in range(self.max_seq_len):
-            target_mask = self.make_target_mask(input, device=feat.device)
-            cls_out, bbox_out = self.decode(input, feat, None, target_mask)
+            target_mask = self.make_target_mask(input, device=feature.device)
+            cls_out, bbox_out = self.decode(input, feature, None, target_mask)
             cls_output = cls_out
             bbox_output = bbox_out
             _, next_word = torch.max(cls_out, dim=-1)
