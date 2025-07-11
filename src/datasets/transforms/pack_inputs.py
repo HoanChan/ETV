@@ -59,13 +59,22 @@ class PackInputs(BaseTransform):
 
         # Pack annotation (token recog)
         data_sample = TokenRecogDataSample()
-        gt_token = LabelData()
+
+        gt_tokens = LabelData()
         tokens = results.get('gt_tokens', [])
         if tokens:
             assert isinstance(tokens, list), "gt_tokens should be a list of tokens."
             assert all(isinstance(token, str) for token in tokens), "All tokens in gt_tokens should be strings."
-            gt_token.item = tokens
-        data_sample.gt_token = gt_token
+            gt_tokens.item = tokens
+        data_sample.gt_tokens = gt_tokens
+
+        gt_bboxs = LabelData()
+        bboxs = results.get('gt_bboxs', [])
+        if bboxs:
+            assert isinstance(bboxs, list), "gt_bboxs should be a list of bounding boxes."
+            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxs), "All bounding boxes in gt_bboxs should be lists or tuples of length 4."
+            gt_bboxs.item = bboxs
+        data_sample.gt_bboxs = gt_bboxs
 
         # Pack meta info
         img_meta = {}
