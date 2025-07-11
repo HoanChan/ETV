@@ -14,6 +14,7 @@ class PackInputs(BaseTransform):
     requires keys:
         - 'img': the input image tensor.
         - 'gt_tokens': list of tokens for text recognition.
+        - 'gt_bboxs': list of bounding boxes for text recognition.
 
     optional keys:
         - 'valid_ratio': ratio of valid pixels in the image. Defaults to 1 if not found.
@@ -88,7 +89,7 @@ class PackInputs(BaseTransform):
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'gt_tokens', 'valid_ratio']:
+            if key in results and key not in ['img', 'gt_tokens', 'gt_bboxs', 'valid_ratio']:
                 packed_results[key] = results[key]
         return packed_results
 
