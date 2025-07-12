@@ -144,14 +144,14 @@ class LoadTokens(BaseTransform):
             if bbox_count_in_structure > 0:
                 empty_bbox_mask = build_empty_bbox_mask(bboxes)
                 aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
-                empty_bbox_mask = np.array(empty_bbox_mask)
+                empty_bbox_mask = empty_bbox_mask
                 bbox_masks = build_bbox_mask(structure_tokens)
                 bbox_masks = bbox_masks * empty_bbox_mask
-                results['bboxes'] = np.array(aligned_bboxes)
+                results['bboxes'] = aligned_bboxes
                 results['masks'] = bbox_masks
             else: # No structure tokens or bboxes or matching count, return empty arrays
-                results['bboxes'] = np.array([])
-                results['masks'] = np.array([])
+                results['bboxes'] = []
+                results['masks'] = []
             # Keep 'img' as the original table image
             
         return results
