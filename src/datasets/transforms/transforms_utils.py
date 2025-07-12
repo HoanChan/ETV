@@ -26,8 +26,7 @@ def merge_token(token_list: list) -> list:
     """
     pointer = 0
     merge_token_list = []
-    # </tbody> is the last token str.
-    while token_list[pointer] != '</tbody>':
+    while pointer < len(token_list) and token_list[pointer] != '</tbody>':
         if token_list[pointer] == '<td>':
             tmp = token_list[pointer] + token_list[pointer+1]
             merge_token_list.append(tmp)
@@ -35,7 +34,8 @@ def merge_token(token_list: list) -> list:
         else:
             merge_token_list.append(token_list[pointer])
             pointer += 1
-    merge_token_list.append('</tbody>')
+    if pointer < len(token_list) and token_list[pointer] == '</tbody>':
+        merge_token_list.append('</tbody>')
     return merge_token_list
 
 def insert_empty_bbox_token(token_list: list, cells: list) -> list:
@@ -50,7 +50,7 @@ def insert_empty_bbox_token(token_list: list, cells: list) -> list:
     add_empty_bbox_token_list = []
     for token in token_list:
         if token == '<td></td>' or token == '<td':
-            if 'bbox' not in cells[bbox_idx].keys():
+            if bbox_idx < len(cells) and 'bbox' not in cells[bbox_idx].keys():
                 content = str(cells[bbox_idx]['tokens'])
                 empty_bbox_token = empty_bbox_token_dict[content]
                 add_empty_bbox_token_list.append(empty_bbox_token)
@@ -67,6 +67,8 @@ def get_thead_item_idx(token_list: list) -> list:
     :param token_list: [list]. the raw tokens from the json line file.
     :return: list of index.
     """
+    if '</thead>' not in token_list:
+        return []
     count = 0
     while token_list[count] != '</thead>':
         count += 1
