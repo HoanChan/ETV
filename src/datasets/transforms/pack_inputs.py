@@ -13,8 +13,8 @@ class PackInputs(BaseTransform):
 
     requires keys:
         - 'img': the input image tensor.
-        - 'gt_tokens': list of tokens for text recognition.
-        - 'gt_bboxs': list of bounding boxes for text recognition.
+        - 'tokens': list of tokens for text recognition.
+        - 'bboxs': list of bounding boxes for text recognition.
 
     optional keys:
         - 'valid_ratio': ratio of valid pixels in the image. Defaults to 1 if not found.
@@ -62,18 +62,18 @@ class PackInputs(BaseTransform):
         data_sample = TokenRecogDataSample()
 
         gt_tokens = LabelData()
-        tokens = results.get('gt_tokens', [])
+        tokens = results.get('tokens', [])
         if tokens:
-            assert isinstance(tokens, list), "gt_tokens should be a list of tokens."
-            assert all(isinstance(token, str) for token in tokens), "All tokens in gt_tokens should be strings."
+            assert isinstance(tokens, list), "tokens should be a list of tokens."
+            assert all(isinstance(token, str) for token in tokens), "All tokens should be strings."
             gt_tokens.item = tokens
         data_sample.gt_tokens = gt_tokens
 
         gt_bboxs = LabelData()
-        bboxs = results.get('gt_bboxs', [])
+        bboxs = results.get('bboxs', [])
         if bboxs:
-            assert isinstance(bboxs, list), "gt_bboxs should be a list of bounding boxes."
-            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxs), "All bounding boxes in gt_bboxs should be lists or tuples of length 4."
+            assert isinstance(bboxs, list), "bboxs should be a list of bounding boxes."
+            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxs), "All bounding boxes in bboxs should be lists or tuples of length 4."
             gt_bboxs.item = bboxs
         data_sample.gt_bboxs = gt_bboxs
 
@@ -89,7 +89,7 @@ class PackInputs(BaseTransform):
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'gt_tokens', 'gt_bboxs', 'valid_ratio']:
+            if key in results and key not in ['img', 'tokens', 'bboxs', 'valid_ratio']:
                 packed_results[key] = results[key]
         return packed_results
 
