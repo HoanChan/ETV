@@ -18,24 +18,17 @@ class LoadTokens(BaseTransform):
         + 'bboxes': list of all token bboxes (calculated from structure tokens and cell bboxes).
         + 'masks': mask for bboxes (1 for valid bbox, 0 for empty bbox).
 
-    - If with_cell: returns 'cells' as a list of dicts, each dict contains:
-        {
-            'tokens': ...,    # list of tokens for the cell
-            'bboxes': ...,    # bboxes of the cell (one bbox)
-            'id': ...         # id of the cell
-        }
-
     Full output annotation format (if with_structure and with_cell):
         {
-            'img': ...        # original table image
-            'tokens': [...],  # list of structure tokens if with_structure
-            'bboxes': [...],  # list of all token bboxes if with_structure
-            'masks': [...],   # list of all masks for bboxes if with_structure
-            'cells': [        # list of cell information if with_cell
+            'img': ...               # original table image
+            'tokens': [...],         # list of structure tokens if with_structure
+            'bboxes': [...],         # list of all token bboxes if with_structure
+            'masks': [...],          # list of all masks for bboxes if with_structure
+            'cells': [               # list of cell information if with_cell
                 {
-                    'tokens': ...,    # list of tokens for the cell
-                    'bboxes': ...,    # bboxes of the cell (one bbox)
-                    'id': ...         # id of the cell
+                    'tokens': ...,   # list of tokens for the cell
+                    'bbox': ...,     # bbox of the cell
+                    'id': ...        # id of the cell
                 }
                 ...
             ],
@@ -43,14 +36,14 @@ class LoadTokens(BaseTransform):
 
     Input annotation format:
         {
-            'img': ...  # original table image
+            'img': ...               # original table image
             'instances': [
                 {
-                    'tokens': [...],     # list of tokens for the instance (table or cell)
-                    'task_type': ...     # 'structure' or 'content',
-                    'cell_id': ...,      # only for content
-                    'bbox': [...],       # only for content
-                    'img': ...           # only for content if already cropped
+                    'tokens': [...], # list of tokens for the instance (table or cell)
+                    'task_type': ... # 'structure' or 'content',
+                    'cell_id': ...,  # only for content
+                    'bbox': [...],   # only for content
+                    'img': ...       # only for content if already cropped
                 },
                 ...
             ],
@@ -91,8 +84,8 @@ class LoadTokens(BaseTransform):
             return results
         
         # Normalize Tokens
-        structures = [inst for inst in results['instances'] if inst.get('task_type') == 'structure']
-        cells = [cell for cell in results['instances'] if cell.get('task_type') == 'content']
+        structures = [inst for inst in results['instances'] if inst.get('type') == 'structure']
+        cells = [inst for inst in results['instances'] if inst.get('type') == 'content']
         for instance in structures:
             tokens = instance.get('tokens', [])
             tokens = remove_thead_Bb(tokens)
@@ -100,37 +93,36 @@ class LoadTokens(BaseTransform):
             instance['tokens'] = tokens
         
         # Get information for each cell
-        cells = []
+        cells_result = []
         bboxes = []
-        for instance in results['instances']:
-            if instance.get('task_type') == 'content':
-                tokens = instance.get('tokens', [])
-                if self.max_cell_token_len is not None:
-                    tokens = tokens[:self.max_cell_token_len]
-                bbox = instance.get('bbox', [0, 0, 0, 0])
-                cell_id = instance.get('cell_id', 0)
-                cells.append({
-                    'tokens': tokens,
-                    'bboxes': [bbox],
-                    'id': cell_id
-                })
-                bboxes.append(bbox)
-
+        for instance in cells:
+            tokens = instance.get('tokens', [])
+            if self.max_cell_token_len is not None:
+                tokens = tokens[:self.max_cell_token_len]
+            bbox = instance.get('bbox', [0, 0, 0, 0])
+            cell_id = instance.get('cell_id', 0)
+            cells_result.append({
+                'tokens': tokens,
+                'bbox': bbox,
+                'id': cell_id
+            })
+            bboxes.append(bbox)
+        
         if self.with_cell:
-            results['cells'] = cells
+            results['cells'] = cells_result
 
         if self.with_structure:
             # Get structure tokens
             structure_tokens = []
-            for instance in results['instances']:
-                if instance.get('task_type') == 'structure':
-                    tokens = instance.get('tokens', [])
-                    if self.max_structure_token_len is not None:
-                        tokens = tokens[:self.max_structure_token_len]
-                    structure_tokens.extend(tokens)
+            for instance in structures:
+                tokens = instance.get('tokens', [])
+                if self.max_structure_token_len is not None:
+                    tokens = tokens[:self.max_structure_token_len]
+                structure_tokens.extend(tokens)
             results['tokens'] = structure_tokens
             
             # Advanced bbox parsing - only if we have structure tokens and matching bboxes
+            assert len(bboxes) == get_bbox_nums(structure_tokens), f'Number of bboxes {len(bboxes)} does not match number of structure tokens {get_bbox_nums(structure_tokens)}\n\nbboxes: {bboxes}\n\nstructure tokens: {structure_tokens} '
             if structure_tokens and bboxes and len(bboxes) == get_bbox_nums(structure_tokens):
                 empty_bbox_mask = build_empty_bbox_mask(bboxes)
                 aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
