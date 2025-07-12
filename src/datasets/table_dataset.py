@@ -32,16 +32,30 @@ class PubTabNetDataset(BaseDataset):
         }
     }
 
+    Ouput format:
+    {
+        'img_path': str,  # path to the image
+        'sample_idx': int,  # sample index
+        'instances': [
+            {
+                'tokens': [str],
+                'type': 'structure',      # 'structure' or 'content'
+                'cell_id': int,           # only for content
+                'bbox': [x0, y0, x1, y1]  # only for content
+            }
+        ],
+        'img_info': {
+            'height': int,  # image height
+            'width': int,   # image width
+            'split': str    # 'train', 'val', or 'test'
+        }
+    }
+
     Supported file formats:
         - .jsonl: Line-by-line JSON format
         - .bz2: JSONL compressed with bz2
 
     Args:
-        task_type (str): Task type, can be 'structure', 'content', or 'both'.
-            - 'structure': Only table structure recognition
-            - 'content': Only cell content recognition
-            - 'both': Both structure and content recognition
-            Defaults to 'both'.
         split_filter (str, optional): Filter data by split ('train', 'val', 'test').
             If None, all splits will be included. Defaults to None.
         max_structure_len (int): Maximum sequence length for structure tokens.
@@ -71,7 +85,6 @@ class PubTabNetDataset(BaseDataset):
     )
 
     def __init__(self,
-                 task_type: str = 'both',
                  split_filter: Optional[str] = None,
                  max_structure_len: int = 500,
                  max_cell_len: int = 150,
@@ -80,12 +93,9 @@ class PubTabNetDataset(BaseDataset):
                  random_sample: bool = False,
                  **kwargs):
         
-        assert task_type in ['structure', 'content', 'both'], f"task_type must be 'structure', 'content', or 'both', got {task_type}"
-        
         if split_filter is not None:
             assert split_filter in ['train', 'val', 'test'], f"split_filter must be 'train', 'val', or 'test', got {split_filter}"
 
-        self.task_type = task_type
         self.split_filter = split_filter
         self.max_structure_len = max_structure_len
         self.max_cell_len = max_cell_len
@@ -137,31 +147,29 @@ class PubTabNetDataset(BaseDataset):
             instances = []
             
             # Structure recognition
-            if self.task_type in ['structure', 'both']:
-                structure_tokens = html_data.get('structure', {}).get('tokens', [])
-                instances.append({
-                    'tokens': structure_tokens[:self.max_structure_len],
-                    'task_type': 'structure'
-                })
+            structure_tokens = html_data.get('structure', {}).get('tokens', [])
+            instances.append({
+                'tokens': structure_tokens[:self.max_structure_len],
+                'type': 'structure'
+            })
             
             # Cell content recognition
-            if self.task_type in ['content', 'both']:
-                for idx, cell in enumerate(html_data.get('cells', [])):
-                    cell_tokens = cell.get('tokens', [])
-                    cell_bbox = cell.get('bbox', [])
-                    
-                    if not cell_tokens and self.ignore_empty_cells:
-                        continue
-                    if len(cell_bbox) != 4:
-                        continue
-                    
-                    instances.append({
-                        'tokens': cell_tokens[:self.max_cell_len],
-                        'cell_id': idx,
-                        'task_type': 'content',
-                        'bbox': cell_bbox
-                    })
-            
+            for idx, cell in enumerate(html_data.get('cells', [])):
+                cell_tokens = cell.get('tokens', [])
+                cell_bbox = cell.get('bbox', [])
+                
+                if not cell_tokens and self.ignore_empty_cells:
+                    continue
+                if len(cell_bbox) != 4:
+                    continue
+                
+                instances.append({
+                    'tokens': cell_tokens[:self.max_cell_len],
+                    'cell_id': idx,
+                    'type': 'content',
+                    'bbox': cell_bbox
+                })
+        
             return {
                 'img_path': os.path.join(self.data_prefix.get('img_path', ''), raw_data_info['filename']),
                 'sample_idx': raw_data_info.get('imgid', 0),
