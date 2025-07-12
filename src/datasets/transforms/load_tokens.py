@@ -88,42 +88,60 @@ class LoadTokens(BaseTransform):
         cells = [inst for inst in results['instances'] if inst.get('type') == 'content']
         for instance in structures:
             tokens = instance.get('tokens', [])
-            tokens = remove_thead_Bb(tokens)
-            tokens = process_token(tokens, cells)
+            tokens = remove_thead_Bb(tokens) # Remove <b> and </b> tags from header cells
+            tokens = process_token(tokens, cells) # Merge the common tokens, insert empty bbox tokens if cell dont have bbox
             instance['tokens'] = tokens
         
-        # Get information for each cell
+        # Get structure tokens
+        structure_tokens = []
+        for instance in structures:
+            tokens = instance.get('tokens', [])
+            if self.max_structure_token_len is not None:
+                tokens = tokens[:self.max_structure_token_len]
+            structure_tokens.extend(tokens)
+            
+        if self.with_structure:
+            results['tokens'] = structure_tokens
+
+        bbox_count_in_structure = get_bbox_nums(structure_tokens)
+
+        # Get information for each cell and build bboxes for structure, empty cells will have bbox [0, 0, 0, 0]
         cells_result = []
         bboxes = []
-        for instance in cells:
-            tokens = instance.get('tokens', [])
-            if self.max_cell_token_len is not None:
-                tokens = tokens[:self.max_cell_token_len]
-            bbox = instance.get('bbox', [0, 0, 0, 0])
-            cell_id = instance.get('cell_id', 0)
-            cells_result.append({
-                'tokens': tokens,
-                'bbox': bbox,
-                'id': cell_id
-            })
+        idxs = [s.get('cell_id') for s in cells if 'cell_id' in s]
+        assert len(set(idxs)) == len(idxs), f"cell_id must be unique in cells, id: {idxs}"
+        for i in range(bbox_count_in_structure):
+            if i in idxs: # If cell_id exists in cells, use it
+                # Find the cell instance with cell_id == i
+                cell_instance = None
+                for cell in cells:
+                    if cell.get('cell_id') == i:
+                        cell_instance = cell
+                        break
+                
+                if cell_instance is not None:
+                    tokens = cell_instance.get('tokens', [])
+                    if self.max_cell_token_len is not None:
+                        tokens = tokens[:self.max_cell_token_len]
+                    bbox = cell_instance.get('bbox', [0, 0, 0, 0])
+                    cell_id = cell_instance.get('cell_id', 0)
+                    cells_result.append({
+                        'tokens': tokens,
+                        'bbox': bbox,
+                        'id': cell_id
+                    })
+            else: # If cell_id does not exist, use empty bbox
+                bbox = [0, 0, 0, 0]
             bboxes.append(bbox)
         
         if self.with_cell:
             results['cells'] = cells_result
 
         if self.with_structure:
-            # Get structure tokens
-            structure_tokens = []
-            for instance in structures:
-                tokens = instance.get('tokens', [])
-                if self.max_structure_token_len is not None:
-                    tokens = tokens[:self.max_structure_token_len]
-                structure_tokens.extend(tokens)
-            results['tokens'] = structure_tokens
             
             # Advanced bbox parsing - only if we have structure tokens and matching bboxes
-            assert len(bboxes) == get_bbox_nums(structure_tokens), f'Number of bboxes {len(bboxes)} does not match number of structure tokens {get_bbox_nums(structure_tokens)}\n\nbboxes: {bboxes}\n\nstructure tokens: {structure_tokens} '
-            if structure_tokens and bboxes and len(bboxes) == get_bbox_nums(structure_tokens):
+
+            if bbox_count_in_structure > 0:
                 empty_bbox_mask = build_empty_bbox_mask(bboxes)
                 aligned_bboxes, empty_bbox_mask = align_bbox_mask(bboxes, empty_bbox_mask, structure_tokens)
                 empty_bbox_mask = np.array(empty_bbox_mask)
