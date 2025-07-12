@@ -115,31 +115,24 @@ class TestPubTabNetDataset:
                 json.dump(sample2, f)
                 f.write('\n')
         
-        try:
+        try:        
             dataset = PubTabNetDataset(
-                ann_file=temp_file.name,
-                data_root='/tmp/test_data',
-                lazy_init=True
+            ann_file=temp_file.name,
+            data_root='/tmp/test_data',
+            lazy_init=True
             )
-            
+
             assert dataset.ann_file == temp_file.name
-            assert dataset.task_type == 'both'
             
         finally:
             os.unlink(temp_file.name)
     
 
-    @pytest.mark.parametrize("task_type,expected_instances", [
-        ('structure', 1),  # Only structure instance
-        ('content', 2),    # Two cell instances  
-        ('both', 3)        # 1 structure + 2 content instances
-    ])
-    def test_parse_data_info_by_task_type(self, sample_annotation, task_type, expected_instances):
-        """Test parsing data info for different task types."""
+    def test_parse_data_info_instances(self, sample_annotation):
+        """Test parsing data info for instances structure."""
         dataset = PubTabNetDataset(
             ann_file='dummy.jsonl',
-            lazy_init=True,
-            task_type=task_type
+            lazy_init=True
         )
         
         data_info = dataset.parse_data_info(sample_annotation)
@@ -149,26 +142,29 @@ class TestPubTabNetDataset:
         assert 'instances' in data_info
         assert 'img_info' in data_info
         
-        # Check instances count
+        # Check instances count (always has 1 structure + 2 content instances)
         instances = data_info['instances']
-        assert len(instances) == expected_instances
+        assert len(instances) == 3
         
-        # Verify task types
-        if task_type == 'structure':
-            assert instances[0]['task_type'] == 'structure'
-            expected_structure = ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
-            assert instances[0]['tokens'] == expected_structure
-        elif task_type == 'content':
-            for i, instance in enumerate(instances):
-                assert instance['task_type'] == 'content'
-                assert instance['cell_id'] == i
-                assert 'bbox' in instance
-        elif task_type == 'both':
-            structure_instances = [inst for inst in instances if inst['task_type'] == 'structure']
-            content_instances = [inst for inst in instances if inst['task_type'] == 'content']
-            assert len(structure_instances) == 1
-            assert len(content_instances) == 2
-    
+        # Verify instance types
+        types = [instance['type'] for instance in instances]
+        assert 'structure' in types
+        assert 'content' in types
+        
+        # Check structure instance
+        structure_instances = [inst for inst in instances if inst['type'] == 'structure']
+        assert len(structure_instances) == 1
+        expected_structure = ['<table>', '<tr>', '<td>', '</td>', '<td>', '</td>', '</tr>', '</table>']
+        assert structure_instances[0]['tokens'] == expected_structure
+        
+        # Check content instances  
+        content_instances = [inst for inst in instances if inst['type'] == 'content']
+        assert len(content_instances) == 2
+        for instance in content_instances:
+            assert 'tokens' in instance
+            assert 'cell_id' in instance
+            assert 'bbox' in instance
+
     def test_parse_data_info_with_empty_cells(self, sample_annotation):
         """Test parsing data info with empty cells."""
         # Modify sample to have empty cells
@@ -178,21 +174,18 @@ class TestPubTabNetDataset:
         
         dataset = PubTabNetDataset(
             ann_file='dummy.jsonl',
-            lazy_init=True,
-            task_type='content'
+            lazy_init=True
         )
         
         data_info = dataset.parse_data_info(sample_annotation)
-        
-        # Check instances format (mmOCR 1.x)
-        instances = data_info['instances']
-        
-        # Should still have 2 cell instances (empty cells are ignored by default)
-        assert len(instances) == 2
-        
-        # All instances should be content type
-        for instance in instances:
-            assert instance['task_type'] == 'content'
+          # Check instances format (mmOCR 1.x)
+        instances = data_info['instances']        # Should still have 3 instances (1 structure + 2 content, empty cells are ignored)
+        assert len(instances) == 3
+
+        # Check we have structure and content instances
+        types = [instance['type'] for instance in instances]
+        assert 'structure' in types
+        assert 'content' in types
     
     @pytest.mark.parametrize("scenario,expected_error", [
         ('file_not_found', FileNotFoundError),
@@ -205,8 +198,9 @@ class TestPubTabNetDataset:
             with pytest.raises(expected_error):
                 dataset.load_data_list()
         elif scenario == 'invalid_task_type':
+            # Since we don't have task_type parameter anymore, test invalid split_filter instead
             with pytest.raises(expected_error):
-                PubTabNetDataset(ann_file='dummy.jsonl', lazy_init=True, task_type='invalid')
+                PubTabNetDataset(ann_file='dummy.jsonl', lazy_init=True, split_filter='invalid')
     
     @pytest.mark.parametrize("config_param,config_value", [
         ('indices', [0]),
@@ -224,7 +218,8 @@ class TestPubTabNetDataset:
         dataset = PubTabNetDataset(**kwargs)
         
         if config_param == 'indices':
-            assert dataset.task_type == 'both'  # Basic check
+            # Basic check that dataset initializes successfully
+            assert len(dataset.ann_file) > 0
         elif config_param == 'data_prefix':
             assert dataset.data_prefix['img_path'] == 'images/'
         elif config_param == 'test_mode':
@@ -255,7 +250,6 @@ class TestPubTabNetDataset:
         assert dataset.METAINFO['task_name'] == 'table_recognition'
         
         # Test instances format compliance
-        dataset.task_type = 'both'
         data_info = dataset.parse_data_info(sample_annotation)
         
         # Check main format
@@ -270,8 +264,8 @@ class TestPubTabNetDataset:
         
         for instance in instances:
             assert 'tokens' in instance
-            assert 'task_type' in instance
-            assert instance['task_type'] in ['structure', 'content']
+            assert 'type' in instance
+            assert instance['type'] in ['structure', 'content']
     
     @pytest.mark.parametrize("token_type,task_type", [
         ('structure', 'structure'),
@@ -281,22 +275,25 @@ class TestPubTabNetDataset:
         """Test that tokens are properly stored with length limits."""
         dataset = PubTabNetDataset(
             ann_file='dummy.jsonl',
-            lazy_init=True,
-            task_type=task_type
+            lazy_init=True
         )
         
         data_info = dataset.parse_data_info(sample_annotation)
         instances = data_info['instances']
         
         if token_type == 'structure':
+            structure_instances = [inst for inst in instances if inst['type'] == 'structure']
+            assert len(structure_instances) > 0
             tokens = sample_annotation['html']['structure']['tokens']
             expected = tokens[:dataset.max_structure_len]
-            assert instances[0]['tokens'] == expected
+            assert structure_instances[0]['tokens'] == expected
         elif token_type == 'cell':
+            content_instances = [inst for inst in instances if inst['type'] == 'content']
+            assert len(content_instances) > 0
             # Check first cell
             cell1_tokens = sample_annotation['html']['cells'][0]['tokens']
             expected_cell1 = cell1_tokens[:dataset.max_cell_len]
-            assert instances[0]['tokens'] == expected_cell1
+            assert content_instances[0]['tokens'] == expected_cell1
     
     @pytest.mark.parametrize("max_data,random_sample,expected_behavior", [
         (-1, False, 'load_all'),           # Default behavior

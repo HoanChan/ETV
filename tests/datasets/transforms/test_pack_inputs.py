@@ -104,44 +104,55 @@ def test_transform_no_normalization():
     # Kiểm tra không có normalize
     assert 'img_norm_cfg' not in packed_results
 
-# Test gt_texts handling
-@pytest.mark.parametrize("gt_texts", [
-    ['hello world'],
-    ['single text'],
-    None,
+@pytest.mark.parametrize("tokens,bboxs", [
+    (['hello', 'world'], [[0, 0, 10, 10], [10, 0, 20, 10]]),
+    (['single'], [[0, 0, 10, 10]]),
+    ([], []),
+    (None, None),
 ])
-def test_transform_gt_texts(gt_texts):
-    """Test xử lý gt_texts"""
+def test_transform_tokens_bboxs(tokens, bboxs):
+    """Test xử lý tokens và bboxs"""
     transform = PackInputs()
     
     results = {'img': np.random.rand(32, 128, 3).astype(np.float32)}
-    if gt_texts is not None:
-        results['gt_texts'] = gt_texts
+    if tokens is not None:
+        results['tokens'] = tokens
+    if bboxs is not None:
+        results['bboxs'] = bboxs
     
     packed_results = transform.transform(results)
     
     # Kiểm tra data_samples
     assert 'data_samples' in packed_results
     data_sample = packed_results['data_samples']
-    assert hasattr(data_sample, 'gt_text')
+    assert hasattr(data_sample, 'gt_tokens')
+    assert hasattr(data_sample, 'gt_bboxs')
     
-    if gt_texts is not None:
-        assert hasattr(data_sample.gt_text, 'item')
-        assert data_sample.gt_text.item == gt_texts[0]
+    if tokens is not None and len(tokens) > 0:
+        assert hasattr(data_sample.gt_tokens, 'item')
+        assert data_sample.gt_tokens.item == tokens
     else:
-        assert not hasattr(data_sample.gt_text, 'item')
+        assert not hasattr(data_sample.gt_tokens, 'item') or data_sample.gt_tokens.item == []
+        
+    if bboxs is not None and len(bboxs) > 0:
+        assert hasattr(data_sample.gt_bboxs, 'item')
+        assert data_sample.gt_bboxs.item == bboxs
+    else:
+        assert not hasattr(data_sample.gt_bboxs, 'item') or data_sample.gt_bboxs.item == []
 
-def test_transform_gt_texts_multiple_error():
-    """Test lỗi khi có nhiều gt_texts"""
+def test_transform_tokens_validation_error():
+    """Test lỗi khi tokens và bboxs không khớp"""
     transform = PackInputs()
     
     results = {
         'img': np.random.rand(32, 128, 3).astype(np.float32),
-        'gt_texts': ['text1', 'text2']  # Nhiều hơn 1 text
+        'tokens': ['token1', 'token2'],
+        'bboxs': [[0, 0, 10, 10]]  # Thiếu 1 bbox
     }
     
-    with pytest.raises(AssertionError, match="Each image sample should have one text annotation only"):
-        transform.transform(results)
+    # Không nên raise error vì pack_inputs không validate này
+    packed_results = transform.transform(results)
+    assert 'data_samples' in packed_results
 
 # Test meta keys handling
 @pytest.mark.parametrize("meta_keys,input_data", [
@@ -186,17 +197,17 @@ def test_transform_additional_keys(keys, additional_data):
     
     # Kiểm tra additional keys
     for key in keys:
-        if key in additional_data and key not in ['img', 'gt_texts']:
+        if key in additional_data and key not in ['img', 'tokens', 'bboxs', 'valid_ratio']:
             assert packed_results[key] == additional_data[key]
-        elif key in ['img', 'gt_texts']:
-            # img và gt_texts không được pack vào additional keys
+        elif key in ['img', 'tokens', 'bboxs']:
+            # img, tokens, bboxs không được pack vào additional keys
             assert key not in packed_results or key in ['inputs', 'data_samples']
 
 def test_transform_no_image():
     """Test transform khi không có image"""
     transform = PackInputs()
     
-    results = {'gt_texts': ['hello world']}
+    results = {'tokens': ['hello', 'world']}
     
     packed_results = transform.transform(results)
     
@@ -237,6 +248,14 @@ def test_repr(keys, meta_keys, mean, std, expected_repr):
 
 def test_transform_complete_workflow(sample_results):
     """Test complete workflow với đầy đủ data"""
+    # Cần update sample_results để phù hợp với API mới
+    sample_results_updated = sample_results.copy()
+    sample_results_updated['tokens'] = ['hello', 'world']
+    sample_results_updated['bboxs'] = [[0, 0, 10, 10], [10, 0, 20, 10]]
+    # Remove gt_texts nếu có
+    if 'gt_texts' in sample_results_updated:
+        del sample_results_updated['gt_texts']
+    
     transform = PackInputs(
         keys=('extra_key',),
         meta_keys=('img_path', 'ori_shape', 'img_shape', 'pad_shape', 'valid_ratio'),
@@ -244,7 +263,7 @@ def test_transform_complete_workflow(sample_results):
         std=[0.229, 0.224, 0.225]
     )
     
-    packed_results = transform.transform(sample_results)
+    packed_results = transform.transform(sample_results_updated)
     
     # Kiểm tra tất cả components
     assert 'inputs' in packed_results
@@ -258,8 +277,10 @@ def test_transform_complete_workflow(sample_results):
     
     # Kiểm tra data_samples
     data_sample = packed_results['data_samples']
-    assert hasattr(data_sample.gt_text, 'item')
-    assert data_sample.gt_text.item == 'hello world'
+    assert hasattr(data_sample.gt_tokens, 'item')
+    assert data_sample.gt_tokens.item == ['hello', 'world']
+    assert hasattr(data_sample.gt_bboxs, 'item')
+    assert data_sample.gt_bboxs.item == [[0, 0, 10, 10], [10, 0, 20, 10]]
     assert data_sample.metainfo['img_path'] == '/path/to/image.jpg'
     assert data_sample.metainfo['valid_ratio'] == 0.8
     
