@@ -186,6 +186,6 @@ class PubTabNetDataset(BaseDataset):
 
     def __repr__(self) -> str:
         """Print the basic information of the dataset."""
-        return (f'{self.__class__.__name__}(task_type={self.task_type}, '
+        return (f'{self.__class__.__name__}('
                 f'split_filter={self.split_filter}, max_data={self.max_data}, '
                 f'random_sample={self.random_sample}, num_samples={len(self)})')
