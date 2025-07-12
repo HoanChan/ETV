@@ -55,7 +55,7 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
         
         # MASTER decoder already handles sequence shifting internally
         # We take targets starting from index 1 to align with predictions
-        targets = targets[:, 1:].contiguous()
+        # targets = targets[:, 1:].contiguous()
         
         if self.flatten:
             # Flatten for standard CrossEntropyLoss: (N*L, C) and (N*L,)
