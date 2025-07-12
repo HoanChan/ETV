@@ -10,6 +10,13 @@ STRUCTURE_VOCAB_FILE = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
 data_pipeline = [
     dict(type='LoadImageFromFile'), # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
     dict(
+        type='LoadTokens', # file:///./../datasets/transforms/load_tokens.py
+        with_structure=True,
+        with_cell=False,
+        max_structure_token_len=600,
+        # max_cell_token_len=600
+    ),
+    dict(
         type='TableResize', # file:///./../datasets/transforms/table_resize.py
         keep_ratio=True,
         long_size=480
@@ -34,7 +41,6 @@ train_dataset = dict(
     type='PubTabNetDataset', # file:///./../datasets/table_dataset.py
     ann_file=VITABSET_TRAIN_JSON,
     data_prefix={'img_path': VITABSET_TRAIN_IMAGE_ROOT},
-    task_type='structure',  # 'structure' or 'content' or 'both'
     split_filter=None,  # Load all splits available in the file
     max_structure_len=600,
     # max_cell_len=600,
