@@ -14,7 +14,6 @@ class PackInputs(BaseTransform):
     requires keys:
         - 'img': the input image tensor.
         - 'tokens': list of tokens for text recognition.
-        - 'bboxs': list of bounding boxes for text recognition.
 
     optional keys:
         - 'valid_ratio': ratio of valid pixels in the image. Defaults to 1 if not found.
@@ -40,6 +39,7 @@ class PackInputs(BaseTransform):
     def transform(self, results: dict) -> dict:
         """Method to pack the input data and collect flexible keys."""
         packed_results = dict()
+        img_meta = {}
         # Pack image
         if 'img' in results:
             img = results['img']
@@ -55,7 +55,7 @@ class PackInputs(BaseTransform):
             if self.mean is not None and self.std is not None:
                 img = img.float()  # Ensure tensor is float before normalization
                 img = TF.normalize(img, self.mean, self.std)
-                packed_results['img_norm_cfg'] = dict(mean=self.mean, std=self.std)
+                img_meta['img_norm_cfg'] = dict(mean=self.mean, std=self.std)
             packed_results['inputs'] = img
 
         # Pack annotation (token recog)
@@ -68,16 +68,7 @@ class PackInputs(BaseTransform):
             gt_tokens.item = tokens
         data_sample.gt_tokens = gt_tokens
 
-        gt_bboxes = LabelData()
-        bboxes = results.get('bboxes', [])
-        if len(bboxes) > 0:
-            assert isinstance(bboxes, list), f"bboxes should be a list of bounding boxes. Got {type(bboxes)}."
-            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxes), f"All bounding boxes in bboxes should be lists or tuples of length 4. Got types {[type(bbox) for bbox in bboxes]}. Got lengths {[len(bbox) for bbox in bboxes]}."
-            gt_bboxes.item = bboxes
-        data_sample.gt_bboxes = gt_bboxes
-
         # Pack meta info
-        img_meta = {}
         for key in self.meta_keys:
             if key == 'valid_ratio':
                 img_meta[key] = results.get('valid_ratio', 1)
@@ -88,7 +79,7 @@ class PackInputs(BaseTransform):
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'tokens', 'bboxes', 'valid_ratio']:
+            if key in results and key not in ['img', 'tokens', 'valid_ratio']:
                 packed_results[key] = results[key]
                 
         return packed_results
