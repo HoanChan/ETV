@@ -14,7 +14,7 @@ data_pipeline = [
         with_structure=True,
         with_cell=False,
         max_structure_token_len=600,
-        # max_cell_token_len=600
+        max_cell_token_len=600
     ),
     dict(
         type='TableResize', # file:///./../datasets/transforms/table_resize.py
@@ -33,7 +33,7 @@ data_pipeline = [
         keys=['img'],
         mean=[0.5, 0.5, 0.5],
         std=[0.5, 0.5, 0.5],
-        meta_keys=('filename', 'ori_shape', 'img_shape', 'scale_factor', 'img_norm_cfg', 'ori_filename', 'pad_shape', 'valid_ratio')
+        meta_keys=('bboxes', 'masks', 'filename', 'ori_shape', 'img_shape', 'scale_factor', 'ori_filename', 'pad_shape', 'valid_ratio')
     )
 ]
 
@@ -141,6 +141,9 @@ model = dict(
         postprocessor=dict(type='TableStructurePostprocessor'), # file:///./../models/postprocessors/table_structure_postprocessor.py
         module_loss=dict(
             type='TableLoss', # file:///./../models/losses/table_loss.py
+            dictionary=dictionary,
+            max_seq_len=600,
+            max_bbox_len=600,
             loss_token=dict(
                 type='MASTERTFLoss', # file:///./../models/losses/master_tf_loss.py
                 ignore_index=PAD, 
@@ -164,6 +167,7 @@ model = dict(
 custom_imports = dict(
     imports=[
         'datasets.table_dataset',
+        'datasets.transforms.load_tokens',
         'datasets.transforms.pack_inputs',
         'datasets.transforms.table_pad',
         'datasets.transforms.table_resize',
