@@ -54,20 +54,23 @@ class TableL1Loss(nn.Module):
         Args:
             outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4).
             targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
-                information including 'bbox' and 'bbox_masks'.
+                information including 'padded_bbox' and 'padded_masks'.
                 
         Returns:
-            tuple: Formatted (masked_outputs, masked_targets, bbox_masks).
+            tuple: Formatted (masked_outputs, masked_targets, masks).
         """
         # Extract targets starting from index 1 to align with predictions
-        bboxes = targets_dict['bbox'][:, 1:, :].to(outputs.device)  # B x L x 4
-        bbox_masks = targets_dict['bbox_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
+        # bboxes = targets_dict['padded_bboxes'][:, 1:, :].to(outputs.device)  # B x L x 4
+        # masks = targets_dict['padded_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
         
+        bboxes = targets_dict['padded_bboxes'].to(outputs.device)  # B x L x 4
+        masks = targets_dict['padded_masks'].unsqueeze(-1).to(outputs.device)  # B x L x 1
+
         # Apply masks to filter valid bounding boxes
-        masked_outputs = outputs * bbox_masks
-        masked_targets = bboxes * bbox_masks
+        masked_outputs = outputs * masks
+        masked_targets = bboxes * masks
         
-        return masked_outputs, masked_targets, bbox_masks
+        return masked_outputs, masked_targets, masks
 
     def forward(self, 
                 outputs: torch.Tensor, 
@@ -80,7 +83,7 @@ class TableL1Loss(nn.Module):
                 where B is batch size, L is sequence length, and 4 represents
                 (x, y, width, height).
             targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
-                information with keys 'bbox' and 'bbox_masks'.
+                information with keys 'padded_bboxes' and 'padded_masks'.
             img_metas (Optional[list]): Image meta information. Defaults to None.
                 
         Returns:
@@ -89,23 +92,20 @@ class TableL1Loss(nn.Module):
                 - 'vertical_bbox_loss': L1 loss for vertical coordinates (y, height)
         """
         # Format inputs
-        masked_outputs, masked_targets, bbox_masks = self._format_inputs(outputs, targets_dict)
+        masked_outputs, masked_targets, masks = self._format_inputs(outputs, targets_dict)
         
         # Compute horizontal loss (x and width coordinates: indices 0, 2)
         horizon_sum_loss = self.l1_loss(
             masked_outputs[:, :, 0::2].contiguous(), 
             masked_targets[:, :, 0::2].contiguous()
         )
-        horizon_loss = self.lambda_horizon * horizon_sum_loss / (bbox_masks.sum() + self.eps)
+        horizon_loss = self.lambda_horizon * horizon_sum_loss / (masks.sum() + self.eps)
         
         # Compute vertical loss (y and height coordinates: indices 1, 3)
         vertical_sum_loss = self.l1_loss(
             masked_outputs[:, :, 1::2].contiguous(), 
             masked_targets[:, :, 1::2].contiguous()
         )
-        vertical_loss = self.lambda_vertical * vertical_sum_loss / (bbox_masks.sum() + self.eps)
+        vertical_loss = self.lambda_vertical * vertical_sum_loss / (masks.sum() + self.eps)
 
-        return {
-            'horizon_bbox_loss': horizon_loss, 
-            'vertical_bbox_loss': vertical_loss
-        }
+        return [horizon_loss, vertical_loss]
