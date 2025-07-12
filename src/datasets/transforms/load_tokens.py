@@ -3,12 +3,15 @@ from typing import Optional
 import numpy as np
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
-from datasets.transforms.transforms_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums
+from datasets.transforms.transforms_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums, remove_thead_Bb, process_token
 
 @TRANSFORMS.register_module()
 class LoadTokens(BaseTransform):
     """
-    Load and process token annotations from table dataset instances.
+    This transform normalizes the raw structure tokens in the annotation through the following steps:
+        - It removes bold tags (<b>, </b>) from table header cells.
+        - It merges common tokens and inserts empty bounding box tokens.
+    After normalization, it loads and processes the token annotations from instances in the table dataset.
 
     - If with_structure: returns 
         + 'tokens': list of structure tokens.
@@ -87,6 +90,15 @@ class LoadTokens(BaseTransform):
                 results['cells'] = []
             return results
         
+        # Normalize Tokens
+        structures = [inst for inst in results['instances'] if inst.get('task_type') == 'structure']
+        cells = [cell for cell in results['instances'] if cell.get('task_type') == 'content']
+        for instance in structures:
+            tokens = instance.get('tokens', [])
+            tokens = remove_thead_Bb(tokens)
+            tokens = process_token(tokens, cells)
+            instance['tokens'] = tokens
+        
         # Get information for each cell
         cells = []
         bboxes = []
@@ -131,6 +143,7 @@ class LoadTokens(BaseTransform):
                 results['bboxes'] = np.array([])
                 results['masks'] = np.array([])
             # Keep 'img' as the original table image
+            
         return results
 
     def __repr__(self) -> str:
