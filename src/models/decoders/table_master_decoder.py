@@ -179,7 +179,7 @@ class TableMasterDecoder(BaseDecoder):
             feat (Tensor, optional): Input feature map from backbone.
             out_enc (Tensor): Feature from encoder with positional encoding applied.
             data_samples (list[TokenRecogDataSample]): Batch of
-                TokenRecogDataSample, containing gt_token and valid_ratio
+                TokenRecogDataSample, containing gt_tokens and valid_ratio
                 information.
 
         Returns:
@@ -195,7 +195,7 @@ class TableMasterDecoder(BaseDecoder):
 
         trg_seq = []
         for target in data_samples:
-            trg_seq.append(target.gt_token.padded_indexes.to(feature.device))
+            trg_seq.append(target.gt_tokens.padded_indexes.to(feature.device))
 
         trg_seq = torch.stack(trg_seq, dim=0)
 
