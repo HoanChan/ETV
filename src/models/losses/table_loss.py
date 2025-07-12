@@ -23,12 +23,14 @@ class TableLoss(BaseTextRecogModuleLoss):
                  loss_bbox: dict,
                  dictionary: Union[Dict, Dictionary],
                  max_seq_len: int = 40,
+                 max_bbox_len: int = 100,
                  **kwargs) -> None:
         super().__init__(
             dictionary=dictionary,
             max_seq_len=max_seq_len,
             **kwargs
         )
+        self.max_bbox_len = max_bbox_len
         self.loss_token = MODELS.build(loss_token)
         self.loss_bbox = MODELS.build(loss_bbox)
 
@@ -43,37 +45,18 @@ class TableLoss(BaseTextRecogModuleLoss):
         Returns:
             dict: Dictionary with computed losses 'loss_token' and 'loss_bbox'.
         """
-        # Process targets using overridden get_targets method
+        # add padded_indexes to data_samples
         data_samples = self.get_targets(data_samples)
-        
-        # Extract processed token targets (padded_indexes for loss computation)
-        gt_tokens = [getattr(s.gt_tokens, 'padded_indexes', s.gt_tokens) for s in data_samples]
-        gt_bboxes = [s.gt_bboxs for s in data_samples]
-
-        loss1 = self.loss_token(outputs[0], gt_tokens)
-        loss2 = self.loss_bbox(outputs[1], gt_bboxes)
+        # Extract ground truth tokens and bounding boxes from data samples
+        gt_tokens = torch.stack([s.gt_tokens.padded_indexes for s in data_samples])
+        bboxes = torch.stack([s.metainfo['padded_bboxes'] for s in data_samples])
+        masks = torch.stack([s.metainfo['padded_masks'] for s in data_samples])
+        loss1 = self.loss_token(outputs[0], {'padded_targets': gt_tokens})
+        loss2 = self.loss_bbox(outputs[1], {'padded_bboxes': bboxes, 'padded_masks': masks})
         return dict(loss_token=loss1, loss_bbox=loss2)
-
-    def get_targets(self, data_samples: Sequence[TokenRecogDataSample]) -> Sequence[TokenRecogDataSample]:
-        """Target generator for table structure recognition.
-        
-        Override base class method to handle tokens instead of characters.
-        The base class processes gt_text.item character by character using str2idx,
-        but TableLoss expects gt_tokens which contains pre-processed token sequences.
-
-        Args:
-            data_samples (list): It usually includes ``gt_tokens`` and ``gt_bboxs`` 
-                information for table structure recognition.
-
-        Returns:
-            list: Updated data_samples. For gt_tokens, two keys will be added:
-
-            - indexes (torch.LongTensor): Token indexes representing gt tokens.
-              All special tokens are excluded, except for UKN.
-            - padded_indexes (torch.LongTensor): Token indexes representing 
-              gt tokens with BOS and EOS if applicable, following several padding 
-              indexes until the length reaches ``max_seq_len``.
-        """
+    
+    def _process_tokens(self, data_samples: Sequence[TokenRecogDataSample]):
+        """Xử lý tokens: thêm indexes và padded_indexes cho mỗi sample."""
         for data_sample in data_samples:
             if data_sample.get('have_target', False):
                 continue
@@ -121,8 +104,49 @@ class TableLoss(BaseTextRecogModuleLoss):
             # Store processed targets in gt_tokens object
             data_sample.gt_tokens.indexes = indexes
             data_sample.gt_tokens.padded_indexes = padded_indexes
-
             # Mark as processed
-            data_sample.set_metainfo(dict(have_target=True))
-            
+            data_sample.set_metainfo({'have_target':True})
+    
+    def _process_bboxes_and_masks(self, data_samples: Sequence[TokenRecogDataSample]):
+        """Xử lý padding cho bboxes và masks, lưu vào metainfo."""
+        for data_sample in data_samples:
+            if data_sample.get('have_bboxes', False):
+                continue
+            bboxes = data_sample.get('bboxes')
+            masks = data_sample.get('masks')
+            bbox_tensor = torch.zeros((self.max_bbox_len, 4), dtype=torch.float32)
+            bbox_tensor[:min(len(bboxes), self.max_bbox_len)] = torch.tensor(bboxes[:self.max_bbox_len], dtype=torch.float32)
+            mask_tensor = torch.zeros(self.max_bbox_len, dtype=torch.float32)
+            mask_tensor[:min(len(masks), self.max_bbox_len)] = torch.tensor(masks[:self.max_bbox_len], dtype=torch.float32)
+            data_sample.set_metainfo({'padded_bboxes':bbox_tensor})
+            data_sample.set_metainfo({'padded_masks':mask_tensor})
+            # Mark as processed
+            data_sample.set_metainfo({'have_bboxes':True})
+
+    def get_targets(self, data_samples: Sequence[TokenRecogDataSample]) -> Sequence[TokenRecogDataSample]:
+        """Target generator for table structure recognition.
+        
+        Override base class method to handle tokens instead of characters.
+        The base class processes gt_text.item character by character using str2idx,
+        but TableLoss expects gt_tokens which contains pre-processed token sequences.
+
+        Args:
+            data_samples (list): It usually includes ``gt_tokens`` 
+            information for table structure recognition.
+
+        Returns:
+            For gt_tokens, two keys will be added:
+
+            - indexes (torch.LongTensor): Token indexes representing gt tokens.
+              All special tokens are excluded, except for UKN.
+            - padded_indexes (torch.LongTensor): Token indexes representing
+              gt_tokens with BOS and EOS if applicable, following several padding
+              indexes until the length reaches `max_seq_len`.
+            For bboxes and masks, two keys will be added:
+            - padded_bboxes (torch.Tensor): Padded bounding boxes tensor.
+            - padded_masks (torch.Tensor): Padded masks tensor.
+
+        """
+        self._process_tokens(data_samples)
+        self._process_bboxes_and_masks(data_samples)
         return data_samples
