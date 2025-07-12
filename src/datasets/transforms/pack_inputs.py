@@ -60,7 +60,6 @@ class PackInputs(BaseTransform):
 
         # Pack annotation (token recog)
         data_sample = TokenRecogDataSample()
-
         gt_tokens = LabelData()
         tokens = results.get('tokens', [])
         if tokens:
@@ -69,13 +68,13 @@ class PackInputs(BaseTransform):
             gt_tokens.item = tokens
         data_sample.gt_tokens = gt_tokens
 
-        gt_bboxs = LabelData()
-        bboxs = results.get('bboxs', [])
-        if bboxs:
-            assert isinstance(bboxs, list), "bboxs should be a list of bounding boxes."
-            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxs), "All bounding boxes in bboxs should be lists or tuples of length 4."
-            gt_bboxs.item = bboxs
-        data_sample.gt_bboxs = gt_bboxs
+        gt_bboxes = LabelData()
+        bboxes = results.get('bboxes', [])
+        if len(bboxes) > 0:
+            assert isinstance(bboxes, list), f"bboxes should be a list of bounding boxes. Got {type(bboxes)}."
+            assert all(isinstance(bbox, (list, tuple)) and len(bbox) == 4 for bbox in bboxes), f"All bounding boxes in bboxes should be lists or tuples of length 4. Got types {[type(bbox) for bbox in bboxes]}. Got lengths {[len(bbox) for bbox in bboxes]}."
+            gt_bboxes.item = bboxes
+        data_sample.gt_bboxes = gt_bboxes
 
         # Pack meta info
         img_meta = {}
@@ -89,8 +88,9 @@ class PackInputs(BaseTransform):
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'tokens', 'bboxs', 'valid_ratio']:
+            if key in results and key not in ['img', 'tokens', 'bboxes', 'valid_ratio']:
                 packed_results[key] = results[key]
+                
         return packed_results
 
     def __repr__(self) -> str:
