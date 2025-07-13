@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Test suite for TableBboxEncode transform."""
+"""Test suite for BboxEncode transform."""
 
 import pytest
 import numpy as np
-from datasets.transforms.table_bbox_encode import TableBboxEncode
+from datasets.transforms.bbox_encode import BboxEncode
 
 
 @pytest.fixture
@@ -48,17 +48,17 @@ def invalid_bbox_data():
     }
 
 
-class TestTableBboxEncode:
-    """Test cases for TableBboxEncode transform."""
+class TestBboxEncode:
+    """Test cases for BboxEncode transform."""
 
     def test_initialization(self):
         """Test basic initialization."""
-        transform = TableBboxEncode()
-        assert isinstance(transform, TableBboxEncode)
+        transform = BboxEncode()
+        assert isinstance(transform, BboxEncode)
 
     def test_basic_transform(self, sample_data):
         """Test basic bbox encoding transformation."""
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
         # Check that bbox and bbox_masks are moved to top level
@@ -102,7 +102,7 @@ class TestTableBboxEncode:
             'filename': 'test.jpg'
         }
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(data)
         
         expected = np.array(expected_xywh_norm, dtype=np.float32)
@@ -110,7 +110,7 @@ class TestTableBboxEncode:
 
     def test_bbox_validation_valid(self, sample_data):
         """Test bbox validation with valid bboxes."""
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
         # All bboxes should be valid (between 0 and 1)
@@ -120,7 +120,7 @@ class TestTableBboxEncode:
 
     def test_bbox_validation_invalid(self, invalid_bbox_data, capsys):
         """Test bbox validation with invalid bboxes."""
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(invalid_bbox_data.copy())
         
         # Should print warning about invalid bboxes
@@ -129,7 +129,7 @@ class TestTableBboxEncode:
 
     def test_edge_case_bboxes(self, edge_case_data):
         """Test edge case bboxes (at image boundaries)."""
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(edge_case_data.copy())
         
         bbox = result['bbox']
@@ -149,7 +149,7 @@ class TestTableBboxEncode:
             'filename': 'empty.jpg'
         }
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(data)
         
         assert result['bbox'].shape == (0, 4)
@@ -167,7 +167,7 @@ class TestTableBboxEncode:
             'filename': 'single.jpg'
         }
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(data)
         
         assert result['bbox'].shape == (1, 4)
@@ -180,7 +180,7 @@ class TestTableBboxEncode:
         """Test that keys are properly adjusted in results dict."""
         original_img_info_keys = set(sample_data['img_info'].keys())
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
         # img_info should no longer have bbox and bbox_masks
@@ -196,7 +196,7 @@ class TestTableBboxEncode:
         sample_data['extra_key'] = 'extra_value'
         sample_data['img_info']['extra_info'] = 'extra_info_value'
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
         assert result['extra_key'] == 'extra_value'
@@ -219,7 +219,7 @@ class TestTableBboxEncode:
         
         # Create bbox that will result in the test values after normalization
         # This is a bit artificial but tests the validation logic
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         
         # Test the validation method directly
         bbox_array = np.array(bbox_values, dtype=np.float32)
@@ -228,9 +228,9 @@ class TestTableBboxEncode:
 
     def test_repr_method(self):
         """Test string representation."""
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         repr_str = repr(transform)
-        assert 'TableBboxEncode' in repr_str
+        assert 'BboxEncode' in repr_str
 
     def test_different_data_types(self):
         """Test with different bbox data types."""
@@ -246,7 +246,7 @@ class TestTableBboxEncode:
             'filename': 'int_bbox.jpg'
         }
         
-        transform = TableBboxEncode()
+        transform = BboxEncode()
         result = transform.transform(data)
         
         # Should work and produce float32 normalized output
