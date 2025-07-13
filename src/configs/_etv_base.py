@@ -5,7 +5,23 @@ VITABSET_VAL_JSON = "F:/data/vitabset/val.bz2"
 VITABSET_TEST_IMAGE_ROOT = "F:/data/vitabset/test"
 VITABSET_TEST_JSON = "F:/data/vitabset/test.bz2"
 STRUCTURE_VOCAB_FILE = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
+# region Dictionary
+start_end_same = False
+alphabet_len = len(open(STRUCTURE_VOCAB_FILE, 'r').readlines())
+if start_end_same:
+    PAD = alphabet_len + 2
+else:
+    PAD = alphabet_len + 3
 
+dictionary = dict(
+    type='TableMasterDictionary', # file:///./../models/dictionaries/table_master_dictionary.py
+    dict_file=STRUCTURE_VOCAB_FILE,
+    with_padding=True,
+    with_unknown=True,
+    same_start_end=True,
+    with_start=True,
+    with_end=True)
+# endregion
 # region Dataset
 data_pipeline = [
     dict(type='LoadImageFromFile'), # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/loading.py#L17
@@ -25,8 +41,8 @@ data_pipeline = [
         type='TablePad', # file:///./../datasets/transforms/table_pad.py
         size=(480, 480),
         pad_val=0,
-        # return_mask=True,
-        # mask_ratio=(8, 8)
+        return_mask=True,
+        mask_ratio=(8, 8)
     ),
     dict(
         type='PackInputs', # file:///./../datasets/transforms/pack_inputs.py
@@ -34,6 +50,13 @@ data_pipeline = [
         mean=[0.5, 0.5, 0.5],
         std=[0.5, 0.5, 0.5],
         meta_keys=('bboxes', 'masks', 'filename', 'ori_shape', 'img_shape', 'scale_factor', 'ori_filename', 'pad_shape', 'valid_ratio')
+    ),
+    dict(
+        type='PadData', # file:///./../datasets/transforms/pad_data.py
+        dictionary=dictionary,
+        max_seq_len=600,
+        max_bbox_len=600,
+        pad_with='auto'
     )
 ]
 
@@ -81,22 +104,6 @@ val_dataloader.update(dataset=val_dataset)
 
 # endregion
 # region Model
-start_end_same = False
-alphabet_len = len(open(STRUCTURE_VOCAB_FILE, 'r').readlines())
-if start_end_same:
-    PAD = alphabet_len + 2
-else:
-    PAD = alphabet_len + 3
-
-dictionary = dict(
-    type='TableMasterDictionary', # file:///./../models/dictionaries/table_master_dictionary.py
-    dict_file=STRUCTURE_VOCAB_FILE,
-    with_padding=True,
-    with_unknown=True,
-    same_start_end=True,
-    with_start=True,
-    with_end=True)
-
 model = dict(
     type='TABLEMASTER', # file:///./../models/recognizer/table_master.py
     backbone=dict(
@@ -121,6 +128,9 @@ model = dict(
         type='TableMasterConcatDecoder', # file:///./../models/decoders/table_master_concat_decoder.py
         n_layers=3,
         n_head=8,
+        d_model=512,
+        max_seq_len=600,
+        dictionary=dictionary,
         decoder=dict(
             self_attn=dict(
                 headers=8,
@@ -137,25 +147,20 @@ model = dict(
             size=512,
             dropout=0.
         ),
-        d_model=512,
         postprocessor=dict(type='TableStructurePostprocessor'), # file:///./../models/postprocessors/table_structure_postprocessor.py
-        module_loss=dict(
-            type='TableLoss', # file:///./../models/losses/table_loss.py
-            dictionary=dictionary,
-            max_seq_len=600,
-            max_bbox_len=600,
-            loss_token=dict(
-                type='MASTERTFLoss', # file:///./../models/losses/master_tf_loss.py
-                ignore_index=PAD, 
-                reduction='mean'
-            ),
-            loss_bbox=dict(
-                type='TableL1Loss', # file:///./../models/losses/table_l1_loss.py
-                reduction='sum'
-            ),
+        tokens_loss=dict(
+            type='MASTERTFLoss', # file:///./../models/losses/master_tf_loss.py
+                ignore_index=PAD,
+                reduction='mean',
+                flatten=True
         ),
-        max_seq_len=600,
-        dictionary=dictionary
+        bboxes_loss=dict(
+            type='TableL1Loss', # file:///./../models/losses/table_l1_loss.py
+            reduction='sum',
+            lambda_horizon=1.0,
+            lambda_vertical=1.0,
+            eps=1e-9,
+        ),
     ),
     data_preprocessor=dict(
         type='TextRecogDataPreprocessor',
@@ -171,6 +176,7 @@ custom_imports = dict(
         'datasets.transforms.pack_inputs',
         'datasets.transforms.table_pad',
         'datasets.transforms.table_resize',
+        'datasets.transforms.pad_data',
         'models.backbones.resnet_extra',
         'models.backbones.table_resnet_extra',
         'models.decoders.table_master_concat_decoder',
@@ -178,7 +184,6 @@ custom_imports = dict(
         'models.encoders.positional_encoding',
         'models.losses.master_tf_loss',
         'models.losses.table_l1_loss',
-        'models.losses.table_loss',
         'models.metrics.teds_metric',
         'models.postprocessors.table_structure_postprocessor',
         'models.recognizer.table_master',
