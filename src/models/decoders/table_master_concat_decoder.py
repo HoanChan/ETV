@@ -12,31 +12,10 @@ class TableMasterConcatDecoder(TableMasterDecoder):
     Inherits all logic from TableMasterDecoder except for the decode method and fully connected layers.
     """
 
-    def __init__(
-        self,
-        n_layers: int = 3,
-        n_head: int = 8,
-        d_model: int = 512,
-        decoder: Optional[Dict] = None,
-        module_loss: Optional[Dict] = None,
-        postprocessor: Optional[Dict] = None,
-        dictionary: Optional[Union[Dict, Dictionary]] = None,
-        max_seq_len: int = 30,
-        init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
-    ):
+    def __init__(self, d_model: int, **kwargs):
         # Initialize parent class first
-        super().__init__(
-            n_layers=n_layers,
-            n_head=n_head,
-            d_model=d_model,
-            decoder=decoder,
-            module_loss=module_loss,
-            postprocessor=postprocessor,
-            dictionary=dictionary,
-            max_seq_len=max_seq_len,
-            init_cfg=init_cfg,
-        )
-        
+        super().__init__(d_model=d_model, **kwargs)
+
         # Override classification and bbox heads for concatenation
         # For concat version, we concatenate one layer output (so concat_dim = d_model * 1 = d_model)
         # If you have multiple layers to concatenate, adjust accordingly
@@ -46,10 +25,7 @@ class TableMasterConcatDecoder(TableMasterDecoder):
         self.cls_fc = nn.Linear(concat_dim, self.dictionary.num_classes)
         
         # Bbox regression head (adjusted for concatenation)
-        self.bbox_fc = nn.Sequential(
-            nn.Linear(concat_dim, 4),
-            nn.Sigmoid()
-        )
+        self.bbox_fc = nn.Sequential(nn.Linear(concat_dim, 4), nn.Sigmoid())
 
     def decode(self, tgt_seq: torch.Tensor, feature: torch.Tensor,
                src_mask: torch.BoolTensor,
