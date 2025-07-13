@@ -27,11 +27,14 @@ class TableMasterDecoder(BaseDecoder):
             Defaults to 512.
         decoder (dict, optional): Config dict for decoder layers. Should contain keys:
             'd_inner', 'attn_drop', 'ffn_drop'.
-        module_loss (dict, optional): Config to build module_loss. Defaults
+        tokens_loss (dict, optional): Config to build tokens_loss. Defaults
+            to None.
+        bboxes_loss (dict, optional): Config to build bboxes_loss. Defaults
             to None.
         postprocessor (dict, optional): Config to build postprocessor.
             Defaults to None.
-        max_seq_len (int): Maximum output sequence length. Defaults to 30.
+        max_seq_len (int): Maximum output sequence length. Defaults to 500.
+        max_bbox_len (int): Maximum bbox length. Defaults to 500.
         init_cfg (dict or list[dict], optional): Initialization configs.
     """
 
@@ -41,33 +44,32 @@ class TableMasterDecoder(BaseDecoder):
         n_head: int = 8,
         d_model: int = 512,
         decoder: Optional[Dict] = None,
-        module_loss: Optional[Dict] = None,
+        tokens_loss: Optional[Dict] = None,
+        bboxes_loss: Optional[Dict] = None,
         postprocessor: Optional[Dict] = None,
         dictionary: Optional[Union[Dict, Dictionary]] = None,
-        max_seq_len: int = 30,
+        max_seq_len: int = 500,
         init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
     ):
-        """
-        Args:
-            n_layers (int): Number of attention layers. Defaults to 3.
-            n_head (int): Number of parallel attention heads. Defaults to 8.
-            d_model (int): Dimension of the input from previous model.
-                Defaults to 512.
-            decoder (dict, optional): Config dict for decoder layers. Should contain keys:
-                'd_inner', 'attn_drop', 'ffn_drop'.
-        """
         decoder = decoder or {}
         d_inner = decoder.get('d_inner', 2048)
         attn_drop = decoder.get('attn_drop', 0.)
         ffn_drop = decoder.get('ffn_drop', 0.)
 
         super().__init__(
-            module_loss=module_loss,
             postprocessor=postprocessor,
             dictionary=dictionary,
             init_cfg=init_cfg,
             max_seq_len=max_seq_len)
-        
+
+        if tokens_loss is not None:
+            assert isinstance(tokens_loss, dict)
+            self.tokens_loss = MODELS.build(tokens_loss)
+
+        if bboxes_loss is not None:
+            assert isinstance(bboxes_loss, dict)
+            self.bboxes_loss = MODELS.build(bboxes_loss)
+
         decoder_layer = TMDLayer(
             d_model=d_model,
             n_head=n_head,
@@ -82,7 +84,7 @@ class TableMasterDecoder(BaseDecoder):
         # Separate classification and bbox layers
         self.cls_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
         self.bbox_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
-
+        self.d_model = d_model
         # Classification head
         self.cls_fc = nn.Linear(d_model, self.dictionary.num_classes)
         
@@ -104,8 +106,7 @@ class TableMasterDecoder(BaseDecoder):
         self.norm = nn.LayerNorm(d_model)
         self.softmax = nn.Softmax(dim=-1)
 
-    def make_target_mask(self, tgt: torch.Tensor,
-                         device: torch.device) -> torch.Tensor:
+    def make_target_mask(self, tgt: torch.Tensor, device: torch.device) -> torch.Tensor:
         """Make target mask for self attention.
 
         Args:
@@ -244,3 +245,30 @@ class TableMasterDecoder(BaseDecoder):
             input = torch.cat([input, next_word[:, -1].unsqueeze(-1)], dim=1)
         
         return self.softmax(cls_output), bbox_output
+    
+    def loss(self,
+             feat: Optional[torch.Tensor] = None,
+             out_enc: Optional[torch.Tensor] = None,
+             data_samples: Optional[Sequence[TokenRecogDataSample]] = None
+             ) -> Dict:
+        """Calculate losses from a batch of inputs and data samples.
+
+        Args:
+            feat (Tensor, optional): Features from the backbone. Defaults
+                to None.
+            out_enc (Tensor, optional): Features from the encoder.
+                Defaults to None.
+            data_samples (list[TextRecogDataSample], optional): A list of
+                N datasamples, containing meta information and gold
+                annotations for each of the images. Defaults to None.
+
+        Returns:
+            dict[str, tensor]: A dictionary of loss components.
+        """
+        out_dec = self(feat, out_enc, data_samples)
+        tokens_loss = self.tokens_loss(out_dec[0], data_samples)
+        bboxes_loss = self.bboxes_loss(out_dec[1], data_samples)
+        result = {}
+        result.update(tokens_loss)
+        result.update(bboxes_loss)
+        return result
