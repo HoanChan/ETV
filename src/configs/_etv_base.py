@@ -51,6 +51,7 @@ data_pipeline = [
         std=[0.5, 0.5, 0.5],
         meta_keys=('bboxes', 'masks', 'filename', 'ori_shape', 'img_shape', 'scale_factor', 'ori_filename', 'pad_shape', 'valid_ratio')
     ),
+    dict(type='BboxEncode'), # file:///./../datasets/transforms/bbox_encode.py
     dict(
         type='PadData', # file:///./../datasets/transforms/pad_data.py
         dictionary=dictionary,
