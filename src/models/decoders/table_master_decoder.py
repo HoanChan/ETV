@@ -34,7 +34,6 @@ class TableMasterDecoder(BaseDecoder):
         postprocessor (dict, optional): Config to build postprocessor.
             Defaults to None.
         max_seq_len (int): Maximum output sequence length. Defaults to 500.
-        max_bbox_len (int): Maximum bbox length. Defaults to 500.
         init_cfg (dict or list[dict], optional): Initialization configs.
     """
 
