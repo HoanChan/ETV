@@ -1,12 +1,9 @@
-
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional
-
+from typing import Dict, Optional, Sequence
 import torch
 import torch.nn as nn
-
 from mmocr.registry import MODELS
-
+from structures.token_recog_data_sample import TokenRecogDataSample
 
 @MODELS.register_module()
 class TableL1Loss(nn.Module):
@@ -35,8 +32,7 @@ class TableL1Loss(nn.Module):
                  **kwargs) -> None:
         super().__init__()
         assert isinstance(reduction, str)
-        assert reduction == 'sum', (
-            'TableL1Loss should use reduction="sum" for proper normalization.')
+        assert reduction == 'sum', 'TableL1Loss should use reduction="sum" for proper normalization.'
         
         self.reduction = reduction
         self.lambda_horizon = lambda_horizon
@@ -46,66 +42,43 @@ class TableL1Loss(nn.Module):
         # Build L1 loss with sum reduction
         self.l1_loss = nn.L1Loss(reduction=reduction)
 
-    def _format_inputs(self, 
-                      outputs: torch.Tensor, 
-                      targets_dict: Dict[str, torch.Tensor]) -> tuple:
-        """Format inputs for loss computation.
+    def forward(self, outputs: torch.Tensor, data_samples: list[TokenRecogDataSample], **kwargs) -> Dict[str, torch.Tensor]:
+        """
+        Compute the L1 loss for table bounding boxes.
         
         Args:
-            outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4).
-            targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
-                information including 'padded_bbox' and 'padded_masks'.
-                
+            outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4),
+                where B is the batch size, L is the sequence length, and 4 represents (x, y, width, height).
+            data_samples (list[TokenRecogDataSample]): List of samples containing ground truth information,
+                including 'bboxes' and 'masks' fields.
+            **kwargs: Additional arguments (not used).
+        
         Returns:
-            tuple: Formatted (masked_outputs, masked_targets, masks).
+            Dict[str, torch.Tensor]:
+                - 'loss_horizon_bbox': L1 loss for horizontal coordinates (x, width)
+                - 'loss_vertical_bbox': L1 loss for vertical coordinates (y, height)
         """
+        # Extract ground truth tokens and bounding boxes from data samples
+        bboxes = torch.stack([s.metainfo['padded_bboxes'] for s in data_samples])
+        masks = torch.stack([s.metainfo['padded_masks'] for s in data_samples])
         # Extract targets starting from index 1 to align with predictions
         # bboxes = targets_dict['padded_bboxes'][:, 1:, :].to(outputs.device)  # B x L x 4
         # masks = targets_dict['padded_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
-        
-        bboxes = targets_dict['padded_bboxes'].to(outputs.device)  # B x L x 4
-        masks = targets_dict['padded_masks'].unsqueeze(-1).to(outputs.device)  # B x L x 1
-
+        bboxes = bboxes.to(outputs.device)  # B x L x 4
+        masks = masks.unsqueeze(-1).to(outputs.device)  # B x L x 1
         # Apply masks to filter valid bounding boxes
         masked_outputs = outputs * masks
         masked_targets = bboxes * masks
-        
-        return masked_outputs, masked_targets, masks
-
-    def forward(self, 
-                outputs: torch.Tensor, 
-                targets_dict: Dict[str, torch.Tensor], 
-                img_metas: Optional[list] = None) -> Dict[str, torch.Tensor]:
-        """Forward function to compute L1 loss for table bounding boxes.
-        
-        Args:
-            outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4)
-                where B is batch size, L is sequence length, and 4 represents
-                (x, y, width, height).
-            targets_dict (Dict[str, torch.Tensor]): Dictionary containing target
-                information with keys 'padded_bboxes' and 'padded_masks'.
-            img_metas (Optional[list]): Image meta information. Defaults to None.
-                
-        Returns:
-            Dict[str, torch.Tensor]: Dictionary containing computed losses:
-                - 'horizon_bbox_loss': L1 loss for horizontal coordinates (x, width)
-                - 'vertical_bbox_loss': L1 loss for vertical coordinates (y, height)
-        """
-        # Format inputs
-        masked_outputs, masked_targets, masks = self._format_inputs(outputs, targets_dict)
-        
         # Compute horizontal loss (x and width coordinates: indices 0, 2)
         horizon_sum_loss = self.l1_loss(
             masked_outputs[:, :, 0::2].contiguous(), 
             masked_targets[:, :, 0::2].contiguous()
         )
         horizon_loss = self.lambda_horizon * horizon_sum_loss / (masks.sum() + self.eps)
-        
         # Compute vertical loss (y and height coordinates: indices 1, 3)
         vertical_sum_loss = self.l1_loss(
             masked_outputs[:, :, 1::2].contiguous(), 
             masked_targets[:, :, 1::2].contiguous()
         )
         vertical_loss = self.lambda_vertical * vertical_sum_loss / (masks.sum() + self.eps)
-
-        return [horizon_loss, vertical_loss]
+        return {'loss_horizon_bbox': horizon_loss, 'loss_vertical_bbox': vertical_loss}

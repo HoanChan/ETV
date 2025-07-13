@@ -1,57 +1,54 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional
-
+from typing import Dict, Union
+from pyparsing import Sequence
 import torch
 import torch.nn as nn
-
 from mmocr.registry import MODELS
-
+from mmocr.registry import TASK_UTILS
+from mmocr.models.common.dictionary import Dictionary
+from structures.token_recog_data_sample import TokenRecogDataSample
 
 @MODELS.register_module()
-class MASTERTFLoss(nn.CrossEntropyLoss):
-    """Implementation of Cross Entropy loss module for MASTER transformer.
-    
-    This loss function is specifically designed for MASTER (Multi-Aspect 
-    Structure Table Recognition) model's sequence prediction task.
-    
+class MASTERTFLoss(nn.Module):
+    """
+    Cross-Entropy loss module for the MASTER transformer model's sequence prediction task.
+
+    This loss is tailored for the MASTER (Multi-Aspect Structure Table Recognition) model, handling sequence-to-sequence prediction for table recognition tasks.
+
     Args:
-        ignore_index (int): The index to be ignored in loss computation.
-            Defaults to -1.
-        reduction (str): The reduction method for the output. 
-            Options are 'none', 'mean' and 'sum'. Defaults to 'none'.
-        flatten (bool): Whether to flatten the output and target tensors.
-            If True, the output will be flattened to (N*L, C) and target
-            to (N*L,). If False, output will be permuted to (N, C, L).
-            Defaults to True.
-        **kwargs: Other keyword arguments passed to nn.CrossEntropyLoss.
+        ignore_index (int): Index to ignore in the loss computation. Default is -1.
+        reduction (str): Specifies the reduction to apply to the output: 'none', 'mean', or 'sum'. Default is 'none'.
+        flatten (bool): If True, flattens outputs and targets to (N*L, C) and (N*L,) for loss computation. If False, permutes outputs to (N, C, L). Default is True.
+        **kwargs: Additional keyword arguments for nn.Module.
     """
 
-    def __init__(self,
+    def __init__(self, # https://github.com/open-mmlab/mmocr/blob/main/mmocr/models/textrecog/module_losses/base.py
                  ignore_index: int = -1,
                  reduction: str = 'none',
-                 flatten: bool = True,
-                 **kwargs) -> None:
-        super().__init__(ignore_index=ignore_index, reduction=reduction, **kwargs)
+                 flatten: bool = True) -> None:
+        super().__init__()
+        self.ctc_loss = nn.CrossEntropyLoss(
+            ignore_index=ignore_index,
+            reduction=reduction)
         assert isinstance(flatten, bool)
         self.flatten = flatten
-
-    def _format_inputs(self, 
-                      outputs: torch.Tensor, 
-                      targets_dict: Dict[str, torch.Tensor]) -> tuple:
-        """Format inputs for loss computation.
-        
-        Args:
-            outputs (torch.Tensor): The prediction logits with shape 
-                (N, L, C) where N is batch size, L is sequence length, 
-                and C is number of classes.
-            targets_dict (Dict[str, torch.Tensor]): Dictionary containing
-                target information. Must contain 'padded_targets' key.
-                
-        Returns:
-            tuple: Formatted (outputs, targets) tensors ready for loss computation.
+            
+    def forward(self, outputs: torch.Tensor, data_samples: list[TokenRecogDataSample], **kwargs) -> Dict[str, torch.Tensor]:
         """
-        # Extract targets from dictionary
-        targets = targets_dict['padded_targets'].to(outputs.device)
+        Compute the cross-entropy loss for sequence prediction.
+
+        Args:
+            outputs (torch.Tensor): Prediction logits of shape (N, L, C), where N is the batch size, L is the sequence length, and C is the number of classes.
+            data_samples (list[TokenRecogDataSample]): List of data samples containing ground truth token information.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Dict[str, torch.Tensor]: Dictionary containing the computed loss tensor.
+        """
+        # Extract ground truth tokens and bounding boxes from data samples
+        gt_tokens = torch.stack([s.gt_tokens.padded_indexes for s in data_samples])
+        # Format inputs for loss computation
+        targets = gt_tokens.to(outputs.device)
         
         # MASTER decoder already handles sequence shifting internally
         # We take targets starting from index 1 to align with predictions
@@ -64,25 +61,5 @@ class MASTERTFLoss(nn.CrossEntropyLoss):
         else:
             # Permute to (N, C, L) format expected by CrossEntropyLoss
             outputs = outputs.permute(0, 2, 1).contiguous()
-            
-        return outputs, targets
 
-    def forward(self, 
-                outputs: torch.Tensor, 
-                targets_dict: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Forward function to compute the cross entropy loss.
-        
-        Args:
-            outputs (torch.Tensor): The prediction logits with shape 
-                (N, L, C) where N is batch size, L is sequence length, 
-                and C is number of classes.
-            targets_dict (Dict[str, torch.Tensor]): Dictionary containing
-                target information. Must contain 'padded_targets' key.
-                
-        Returns:
-            torch.Tensor: The computed cross entropy loss.
-        """
-        # Format inputs for loss computation
-        formatted_outputs, formatted_targets = self._format_inputs(outputs, targets_dict)
-
-        return super().forward(formatted_outputs, formatted_targets)
+        return {'loss_tokens': self.ctc_loss(outputs, targets)}
