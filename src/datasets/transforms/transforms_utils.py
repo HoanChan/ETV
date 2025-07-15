@@ -26,7 +26,7 @@ def merge_token(token_list: list) -> list:
     """
     pointer = 0
     merge_token_list = []
-    while pointer < len(token_list) and token_list[pointer] != '</tbody>':
+    while pointer + 1 < len(token_list) and token_list[pointer] != '</tbody>':
         if token_list[pointer] == '<td>':
             tmp = token_list[pointer] + token_list[pointer+1]
             merge_token_list.append(tmp)
