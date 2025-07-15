@@ -7,10 +7,9 @@ from mmocr.registry import MODELS
 from mmocr.models.common.dictionary import Dictionary
 from mmocr.models.common.modules import PositionalEncoding
 from mmocr.models.textrecog.decoders.base import BaseDecoder
-from mmocr.models.textrecog.decoders.master_decoder import Embeddings
 
 from structures.token_recog_data_sample import TokenRecogDataSample
-from ..layers.tmd_layer import TMDLayer
+from ..layers.decoder_layer import DecoderLayer, Embeddings, clones
 
 @MODELS.register_module()
 class TableMasterDecoder(BaseDecoder):
@@ -50,10 +49,15 @@ class TableMasterDecoder(BaseDecoder):
         max_seq_len: int = 500,
         init_cfg: Optional[Union[Dict, Sequence[Dict]]] = None,
     ):
-        decoder = decoder or {}
-        d_inner = decoder.get('d_inner', 2048)
-        attn_drop = decoder.get('attn_drop', 0.)
-        ffn_drop = decoder.get('ffn_drop', 0.)
+        # Set default decoder config if not provided
+        if decoder is None:
+            decoder = {
+                'self_attn': {'headers': 8, 'd_model': 512, 'dropout': 0.0},
+                'src_attn': {'headers': 8, 'd_model': 512, 'dropout': 0.0},
+                'feed_forward': {'d_model': 512, 'd_ff': 2024, 'dropout': 0.0},
+                'size': 512,
+                'dropout': 0.0
+            }
 
         super().__init__(
             postprocessor=postprocessor,
@@ -69,21 +73,18 @@ class TableMasterDecoder(BaseDecoder):
             assert isinstance(bboxes_loss, dict)
             self.bboxes_loss = MODELS.build(bboxes_loss)
 
-        decoder_layer = TMDLayer(
-            d_model=d_model,
-            n_head=n_head,
-            d_inner=d_inner,
-            attn_drop=attn_drop,
-            ffn_drop=ffn_drop,
-            operation_order=('norm', 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn')
-        )
+        # Create decoder layers using OLD architecture
+        decoder_layer = DecoderLayer(**decoder)
         
-        # Shared decoder layers
-        self.decoder_layers = ModuleList([copy.deepcopy(decoder_layer) for _ in range(n_layers - 1)])
-        # Separate classification and bbox layers
-        self.cls_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
-        self.bbox_layer = ModuleList([copy.deepcopy(decoder_layer) for _ in range(1)])
+        # Shared decoder layers (N-1 layers)
+        self.decoder_layers = clones(decoder_layer, n_layers - 1)
+        
+        # Separate classification and bbox layers (1 layer each)
+        self.cls_layer = clones(decoder_layer, 1)
+        self.bbox_layer = clones(decoder_layer, 1)
+        
         self.d_model = d_model
+        
         # Classification head
         self.cls_fc = nn.Linear(d_model, self.dictionary.num_classes)
         
@@ -99,7 +100,6 @@ class TableMasterDecoder(BaseDecoder):
         self.n_head = n_head
 
         self.embedding = Embeddings(d_model=d_model, vocab=self.dictionary.num_classes)
-
         self.positional_encoding = PositionalEncoding(d_hid=d_model, n_position=self.max_seq_len + 1)
         
         self.norm = nn.LayerNorm(d_model)
@@ -113,20 +113,19 @@ class TableMasterDecoder(BaseDecoder):
             device (torch.device): Mask device.
 
         Returns:
-            Tensor: Mask of shape [N * self.n_head, l_tgt, l_tgt]
+            Tensor: Mask of shape [N, l_tgt, l_tgt]
         """
+        # Create padding mask
         trg_pad_mask = (tgt != self.PAD).unsqueeze(1).unsqueeze(3).bool()
+        
+        # Create subsequent mask (triangular mask)
         tgt_len = tgt.size(1)
         trg_sub_mask = torch.tril(
             torch.ones((tgt_len, tgt_len), dtype=torch.bool, device=device))
+        
+        # Combine masks
         tgt_mask = trg_pad_mask & trg_sub_mask
-
-        # inverse for mmcv's BaseTransformerLayer
-        tril_mask = tgt_mask.clone()
-        tgt_mask = tgt_mask.float().masked_fill_(tril_mask == 0, -1e9)
-        tgt_mask = tgt_mask.masked_fill_(tril_mask, 0)
-        tgt_mask = tgt_mask.repeat(1, self.n_head, 1, 1)
-        tgt_mask = tgt_mask.view(-1, tgt_len, tgt_len)
+        
         return tgt_mask
 
     def decode(self, tgt_seq: torch.Tensor, feature: torch.Tensor,
@@ -144,25 +143,25 @@ class TableMasterDecoder(BaseDecoder):
         Returns:
             Tuple[Tensor, Tensor]: The decoded classification and bbox outputs.
         """
-        tgt_seq = self.embedding(tgt_seq)
-        x = self.positional_encoding(tgt_seq)
-        attn_masks = [tgt_mask, src_mask]
+        # Main process of transformer decoder
+        x = self.embedding(tgt_seq)
+        x = self.positional_encoding(x)
         
-        # Shared decoder layers
+        # Shared decoder layers (N-1 layers)
         for layer in self.decoder_layers:
-            x = layer(query=x, key=feature, value=feature, attn_masks=attn_masks)
+            x = layer(x, feature, src_mask, tgt_mask)
         
         # Classification head
         cls_x = x
         for layer in self.cls_layer:
-            cls_x = layer(query=cls_x, key=feature, value=feature, attn_masks=attn_masks)
+            cls_x = layer(cls_x, feature, src_mask, tgt_mask)
         cls_x = self.norm(cls_x)
         cls_output = self.cls_fc(cls_x)
         
         # Bbox head
         bbox_x = x
         for layer in self.bbox_layer:
-            bbox_x = layer(query=bbox_x, key=feature, value=feature, attn_masks=attn_masks)
+            bbox_x = layer(bbox_x, feature, src_mask, tgt_mask)
         bbox_x = self.norm(bbox_x)
         bbox_output = self.bbox_fc(bbox_x)
         
@@ -200,8 +199,8 @@ class TableMasterDecoder(BaseDecoder):
         trg_seq = torch.stack(trg_seq, dim=0)
 
         src_mask = None
-        tgt_mask = self.make_target_mask(trg_seq, device=feature.device)
-        return self.decode(trg_seq, feature, src_mask, tgt_mask)
+        tgt_mask = self.make_target_mask(trg_seq[:, :-1], device=feature.device)
+        return self.decode(trg_seq[:, :-1], feature, src_mask, tgt_mask)
 
     def forward_test(self,
                      feat: Optional[torch.Tensor] = None,
@@ -232,18 +231,18 @@ class TableMasterDecoder(BaseDecoder):
                            self.SOS,
                            device=feature.device,
                            dtype=torch.long)
-        cls_output = None
-        bbox_output = None
         
-        for _ in range(self.max_seq_len):
+        # Greedy decoding similar to original TableMasterDecoder
+        for _ in range(self.max_seq_len + 1):
             target_mask = self.make_target_mask(input, device=feature.device)
             cls_out, bbox_out = self.decode(input, feature, None, target_mask)
-            cls_output = cls_out
+            # Keep updating output (like original implementation)
+            output = cls_out
             bbox_output = bbox_out
             _, next_word = torch.max(cls_out, dim=-1)
             input = torch.cat([input, next_word[:, -1].unsqueeze(-1)], dim=1)
         
-        return self.softmax(cls_output), bbox_output
+        return self.softmax(output), bbox_output
     
     def loss(self,
              feat: Optional[torch.Tensor] = None,
