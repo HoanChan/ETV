@@ -36,7 +36,7 @@ param_scheduler = [
 ]
 # Runtime settings
 train_cfg = dict(max_epochs=17) # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/schedules/schedule_adam_base.py
-# region Evaluator
+# Evaluator
 val_evaluator = dict(
     type='MultiDatasetsEvaluator', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/evaluation/evaluator/multi_datasets_evaluator.py
     metrics=[
@@ -50,7 +50,7 @@ val_evaluator = dict(
     ],
     dataset_prefixes=None)
 test_evaluator = val_evaluator
-# endregion
-
+# Checkpoint settings
 load_from = None  # No pre-trained model
 resume = False  # Do not resume training from a checkpoint
+log_level = 'WARNING'
