@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 import torch
 import numpy as np
 
-from mmocr.registry import MODELS
+from mmocr.registry import MODELS, TASK_UTILS
 from mmocr.models.textrecog.postprocessors.base import BaseTextRecogPostprocessor
 from mmocr.structures import TextRecogDataSample
 
@@ -46,7 +46,7 @@ class TableMasterPostprocessor(BaseTextRecogPostprocessor):
         
         # Initialize cell dictionary
         if isinstance(cell_dictionary, dict):
-            self.cell_dictionary = MODELS.build(cell_dictionary)
+            self.cell_dictionary = TASK_UTILS.build(cell_dictionary)
         else:
             self.cell_dictionary = cell_dictionary
         
