@@ -139,10 +139,10 @@ class TableMaster(BaseRecognizer):
         for i, (pred_sample, data_sample) in enumerate(zip(predictions, data_samples)):
             # Extract text, score, and bbox from prediction
             if hasattr(pred_sample, 'pred_text'):
-                text = pred_sample.pred_text.item
+                text = pred_sample.pred_text  # Already a string
                 score = getattr(pred_sample, 'pred_score', None)
                 if score is not None:
-                    score = score.item if hasattr(score, 'item') else score
+                    score = score.item() if hasattr(score, 'item') else score
                 else:
                     score = 1.0
             else:

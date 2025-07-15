@@ -244,6 +244,33 @@ class TableMasterDecoder(BaseDecoder):
         
         return self.softmax(output), bbox_output
     
+    def predict(self,
+                feat: Optional[torch.Tensor] = None,
+                out_enc: Optional[torch.Tensor] = None,
+                data_samples: Optional[Sequence[TokenRecogDataSample]] = None
+                ) -> Sequence[TokenRecogDataSample]:
+        """Predict results from a batch of inputs and data samples with post-
+        processing.
+
+        Args:
+            feat (Tensor, optional): Features from the backbone. Defaults
+                to None.
+            out_enc (Tensor, optional): Features from the encoder.
+                Defaults to None.
+            data_samples (list[TokenRecogDataSample], optional): A list of
+                N datasamples, containing meta information and gold
+                annotations for each of the images. Defaults to None.
+
+        Returns:
+            list[TokenRecogDataSample]: A list of N datasamples of prediction
+            results. Results are stored in ``pred_text``.
+        """
+        # Get raw predictions from forward_test
+        cls_output, bbox_output = self.forward_test(feat, out_enc, data_samples)
+        
+        # Pass both outputs to postprocessor as tuple
+        return self.postprocessor((cls_output, bbox_output), data_samples)
+    
     def loss(self,
              feat: Optional[torch.Tensor] = None,
              out_enc: Optional[torch.Tensor] = None,

@@ -152,7 +152,7 @@ model = dict(
             dropout=0.0
         ),
         postprocessor=dict(
-            type='TableStructurePostprocessor', # file:///./../models/postprocessors/table_structure_postprocessor.py
+            type='TableMasterPostprocessor', # file:///./../models/postprocessors/table_master_postprocessor.py
             dictionary=dictionary,
             max_seq_len=600,
             start_end_same=False
@@ -195,7 +195,7 @@ custom_imports = dict(
         'models.losses.master_tf_loss',
         'models.losses.table_l1_loss',
         'models.metrics.teds_metric',
-        'models.postprocessors.table_structure_postprocessor',
+        'models.postprocessors.table_master_postprocessor',
         'models.recognizer.table_master',
         'optimizer.ranger',
     ],
