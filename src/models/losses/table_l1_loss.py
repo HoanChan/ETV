@@ -62,10 +62,8 @@ class TableL1Loss(nn.Module):
         bboxes = torch.stack([s.metainfo['padded_bboxes'] for s in data_samples])
         masks = torch.stack([s.metainfo['padded_masks'] for s in data_samples])
         # Extract targets starting from index 1 to align with predictions
-        # bboxes = targets_dict['padded_bboxes'][:, 1:, :].to(outputs.device)  # B x L x 4
-        # masks = targets_dict['padded_masks'][:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
-        bboxes = bboxes.to(outputs.device)  # B x L x 4
-        masks = masks.unsqueeze(-1).to(outputs.device)  # B x L x 1
+        bboxes = bboxes[:, 1:, :].to(outputs.device)  # B x L x 4
+        masks = masks[:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1
         # Apply masks to filter valid bounding boxes
         masked_outputs = outputs * masks
         masked_targets = bboxes * masks
