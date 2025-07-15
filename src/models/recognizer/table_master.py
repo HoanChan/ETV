@@ -7,8 +7,8 @@ from mmocr.utils.typing_utils import (ConfigType, InitConfigType, OptConfigType,
 from mmocr.models.textrecog.recognizers.base import BaseRecognizer
 
 @MODELS.register_module()
-class TABLEMASTER(BaseRecognizer):
-    """TableMASTER recognizer for table structure recognition.
+class TableMaster(BaseRecognizer):
+    """TableMaster recognizer for table structure recognition.
 
     Args:
         preprocessor (dict, optional): Config dict for preprocessor. Defaults
