@@ -282,10 +282,13 @@ class TEDSMetric(BaseMetric):
             # Extract ground truth HTML
             # Ưu tiên lấy từ data_sample trước, nếu không có thì lấy từ data_batch
             gt_html = self._extract_html_from_sample(data_sample, is_prediction=False)
-            
+
             # Nếu không có ground truth trong data_sample, thử lấy từ data_batch
-            if not gt_html and i < len(data_batch):
-                gt_html = self._extract_html_from_sample(data_batch[i], is_prediction=False)
+            if not gt_html:
+                if isinstance(data_batch, (list, tuple)) and i < len(data_batch):
+                    gt_html = self._extract_html_from_sample(data_batch[i], is_prediction=False)
+                elif isinstance(data_batch, dict):
+                    gt_html = self._extract_html_from_sample(data_batch, is_prediction=False)
 
             # Lưu pred_html và gt_html vào result thay vì teds_score
             result = dict(pred_html=pred_html, gt_html=gt_html)
@@ -319,6 +322,6 @@ class TEDSMetric(BaseMetric):
             'teds': avg_teds,
             'teds_max': max_teds,
             'teds_min': min_teds,
-            'teds_scores': teds_scores
+            # 'teds_scores': teds_scores # mmOCR allow int, float, not list
         }
         return eval_res
