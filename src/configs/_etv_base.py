@@ -106,7 +106,7 @@ val_dataloader.update(dataset=val_dataset)
 # endregion
 # region Model
 model = dict(
-    type='TABLEMASTER', # file:///./../models/recognizer/table_master.py
+    type='TableMaster', # file:///./../models/recognizer/table_master.py
     backbone=dict(
         type='TableResNetExtra', # file:///./../models/backbones/table_resnet_extra.py
         input_dim=3,
@@ -136,24 +136,32 @@ model = dict(
             self_attn=dict(
                 headers=8,
                 d_model=512,
-                dropout=0.),
+                dropout=0.0
+            ),
             src_attn=dict(
                 headers=8,
                 d_model=512,
-                dropout=0.),
+                dropout=0.0
+            ),
             feed_forward=dict(
                 d_model=512,
                 d_ff=2024,
-                dropout=0.),
+                dropout=0.0
+            ),
             size=512,
-            dropout=0.
+            dropout=0.0
         ),
-        postprocessor=dict(type='TableStructurePostprocessor'), # file:///./../models/postprocessors/table_structure_postprocessor.py
+        postprocessor=dict(
+            type='TableStructurePostprocessor', # file:///./../models/postprocessors/table_structure_postprocessor.py
+            dictionary=dictionary,
+            max_seq_len=600,
+            start_end_same=False
+        ),
         tokens_loss=dict(
-            type='MASTERTFLoss', # file:///./../models/losses/master_tf_loss.py
-                ignore_index=PAD,
-                reduction='mean',
-                flatten=True
+            type='MasterTFLoss', # file:///./../models/losses/master_tf_loss.py
+            ignore_index=PAD,
+            reduction='mean',
+            flatten=True
         ),
         bboxes_loss=dict(
             type='TableL1Loss', # file:///./../models/losses/table_l1_loss.py
@@ -177,6 +185,7 @@ custom_imports = dict(
         'datasets.transforms.pack_inputs',
         'datasets.transforms.table_pad',
         'datasets.transforms.table_resize',
+        'datasets.transforms.bbox_encode',
         'datasets.transforms.pad_data',
         'models.backbones.resnet_extra',
         'models.backbones.table_resnet_extra',
