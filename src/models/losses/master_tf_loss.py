@@ -1,19 +1,16 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Union
-from pyparsing import Sequence
+from typing import Dict
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
-from mmocr.registry import TASK_UTILS
-from mmocr.models.common.dictionary import Dictionary
 from structures.token_recog_data_sample import TokenRecogDataSample
 
 @MODELS.register_module()
-class MASTERTFLoss(nn.Module):
+class MasterTFLoss(nn.Module):
     """
-    Cross-Entropy loss module for the MASTER transformer model's sequence prediction task.
+    Cross-Entropy loss module for the Master transformer model's sequence prediction task.
 
-    This loss is tailored for the MASTER (Multi-Aspect Structure Table Recognition) model, handling sequence-to-sequence prediction for table recognition tasks.
+    This loss is tailored for the Master (Multi-Aspect Structure Table Recognition) model, handling sequence-to-sequence prediction for table recognition tasks.
 
     Args:
         ignore_index (int): Index to ignore in the loss computation. Default is -1.

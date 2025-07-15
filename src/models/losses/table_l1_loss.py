@@ -1,5 +1,5 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional, Sequence
+from typing import Dict
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
