@@ -79,7 +79,7 @@ class TEDSMetric(BaseMetric):
                  structure_only: bool = False,
                  ignore_nodes: Optional[list] = None,
                  collect_device: str = 'cpu',
-                 prefix: Optional[str] = None) -> None:
+                 prefix: Optional[str] = 'TEDS') -> None:
         super().__init__(collect_device, prefix)
 
         self.structure_only = structure_only
@@ -296,8 +296,9 @@ class TEDSMetric(BaseMetric):
             Dict: The computed metrics. The keys are the names of the metrics,
             and the values are corresponding results.
         """
+        prefix = self.prefix if self.prefix else 'TEDS'
         if not results:
-            return {'teds': 0.0, 'teds_max': 0.0, 'teds_min': 0.0, 'teds_scores': []}
+            return {f'{prefix}_avg': 0.0, f'{prefix}_max': 0.0, f'{prefix}_min': 0.0}
         teds_scores = []
         for result in results:
             pred_html = result.get('pred_html', '')
@@ -311,9 +312,8 @@ class TEDSMetric(BaseMetric):
         max_teds = max(teds_scores)
         min_teds = min(teds_scores)
         eval_res = {
-            'teds': avg_teds,
-            'teds_max': max_teds,
-            'teds_min': min_teds,
-            # 'teds_scores': teds_scores # mmOCR allow int, float, not list
+            f'{prefix}_avg': avg_teds,
+            f'{prefix}_max': max_teds,
+            f'{prefix}_min': min_teds,
         }
         return eval_res
