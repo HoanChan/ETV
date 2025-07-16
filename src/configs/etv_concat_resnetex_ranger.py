@@ -45,12 +45,11 @@ val_evaluator = dict(
             structure_only=True,
             ignore_nodes=None,
             collect_device='cpu',
-            prefix=None
+            prefix='TEDS'
         )
     ],
     dataset_prefixes=None)
 test_evaluator = val_evaluator
 # Checkpoint settings
-load_from = None  # No pre-trained model
+load_from = None  # 'D:/BIG Projects/Python/ETV/work_dirs/etv_concat_resnetex_ranger/work_dirs/etv_concat_resnetex_ranger/epoch_1.pth' No pre-trained model
 resume = False  # Do not resume training from a checkpoint
-log_level = 'WARNING'
