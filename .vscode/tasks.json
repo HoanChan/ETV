@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Test Train MMOCR",
+      "label": "🧪 Test Train",
       "type": "shell",
       "command": "conda",
       "args": [
@@ -16,14 +16,75 @@
         "work_dirs/etv_concat_resnetex_ranger",
         "--cfg-options",
         "train_cfg.max_epochs=1",
-        "train_dataloader.dataset.max_data=1000",
+        "train_dataloader.dataset.max_data=200",
         "val_cfg=None",
         "val_dataloader=None",
         "val_evaluator=None",
         "test_cfg=None",
         "test_dataloader=None",
         "test_evaluator=None",
+        // "default_hooks.checkpoint=None",
+      ],
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        },
+      },
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "🧪 Test Validation",
+      "type": "shell",
+      "command": "conda",
+      "args": [
+        "run",
+        "-n",
+        "etv",
+        "python",
+        "tools/train.py",
+        "src/configs/etv_concat_resnetex_ranger.py",
+        "--work-dir",
+        "work_dirs/etv_concat_resnetex_ranger",
+        "--cfg-options",
+        "train_cfg.max_epochs=1",
+        "train_dataloader.dataset.max_data=10",
+        "val_dataloader.dataset.max_data=10",
+        "test_cfg=None",
+        "test_dataloader=None",
+        "test_evaluator=None",
         "default_hooks.checkpoint=None",
+        "resume=True"
+      ],
+      "options": {
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/src"
+        },
+      },
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "🧪 Test CheckPoint 1",
+      "type": "shell",
+      "command": "conda",
+      "args": [
+        "run",
+        "-n",
+        "etv",
+        "python",
+        "tools/test.py",
+        "src/configs/etv_concat_resnetex_ranger.py",
+        "work_dirs/etv_concat_resnetex_ranger/epoch_1.pth",
+        "--work-dir",
+        "work_dirs/etv_concat_resnetex_ranger",
+        "--cfg-options",
+        "test_dataloader.dataset.max_data=10",
+        "test_dataloader.batch_size=1",
+        "--show-dir",
+        "work_dirs/etv_concat_resnetex_ranger/vis_results"
       ],
       "options": {
         "env": {
