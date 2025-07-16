@@ -6,7 +6,7 @@ import numpy as np
 from mmcv.transforms.base import BaseTransform
 from mmocr.registry import TRANSFORMS
 
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 from .transforms_utils import xyxy2xywh, normalize_bbox, xywh2xyxy
 
 
@@ -20,7 +20,7 @@ class BboxEncode(BaseTransform):
         2. Normalizes the bounding box coordinates to the [0, 1] range based on the image shape.
 
     Expected input:
-        - data_samples (TokenRecogDataSample): Contains 'bboxes' (ndarray, in xyxy format) and 'img_shape'.
+        - data_samples (TableMasterDataSample): Contains 'bboxes' (ndarray, in xyxy format) and 'img_shape'.
 
     Output/Modifications:
         - Updates 'bboxes' in data_samples to normalized xywh format.
@@ -42,7 +42,7 @@ class BboxEncode(BaseTransform):
             dict: Updated results dictionary with normalized bounding boxes in xywh format.
         """
         data_sample = results.get('data_samples', None)
-        assert isinstance(data_sample, TokenRecogDataSample), f"data_sample should be an instance of TokenRecogDataSample, but got {type(data_sample)}"
+        assert isinstance(data_sample, TableMasterDataSample), f"data_sample should be an instance of TableMasterDataSample, but got {type(data_sample)}"
         if data_sample.get('have_normalized_bboxes', False):
             pass
         else:

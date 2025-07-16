@@ -3,7 +3,7 @@ from typing import Dict
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 
 @MODELS.register_module()
 class MasterTFLoss(nn.Module):
@@ -30,19 +30,19 @@ class MasterTFLoss(nn.Module):
         assert isinstance(flatten, bool)
         self.flatten = flatten
             
-    def forward(self, outputs: torch.Tensor, data_samples: list[TokenRecogDataSample], **kwargs) -> Dict[str, torch.Tensor]:
+    def forward(self, outputs: torch.Tensor, data_samples: list[TableMasterDataSample], **kwargs) -> Dict[str, torch.Tensor]:
         """
         Compute the cross-entropy loss for sequence prediction.
 
         Args:
             outputs (torch.Tensor): Prediction logits of shape (N, L, C), where N is the batch size, L is the sequence length, and C is the number of classes.
-            data_samples (list[TokenRecogDataSample]): List of data samples containing ground truth token information.
+            data_samples (list[TableMasterDataSample]): List of data samples containing ground truth token information.
             **kwargs: Additional keyword arguments.
 
         Returns:
             Dict[str, torch.Tensor]: Dictionary containing the computed loss tensor.
         """
-        # Extract ground truth tokens and bounding boxes from data samples
+        # Extract ground truth tokens from data samples (recognition head)
         gt_tokens = torch.stack([s.gt_tokens.padded_indexes for s in data_samples])
         # Format inputs for loss computation
         targets = gt_tokens.to(outputs.device)

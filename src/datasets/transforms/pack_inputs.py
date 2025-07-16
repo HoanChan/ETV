@@ -1,11 +1,11 @@
 import numpy as np
 from mmcv.transforms import to_tensor
 from mmcv.transforms.base import BaseTransform
-from mmengine.structures import LabelData
+from mmengine.structures import InstanceData, LabelData
 import torchvision.transforms.functional as TF
 
 from mmocr.registry import TRANSFORMS
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 
 @TRANSFORMS.register_module()
 class PackInputs(BaseTransform):
@@ -59,13 +59,36 @@ class PackInputs(BaseTransform):
             packed_results['inputs'] = img
 
         # Pack annotation (token recog)
-        data_sample = TokenRecogDataSample()
+        data_sample = TableMasterDataSample()
+        
+        # Pack gt_instances for detection head (bboxes, masks, etc)
+        gt_instances = InstanceData()
+        
+        # Pack bboxes if available
+        bboxes = results.get('bboxes', None)
+        if bboxes is not None:
+            gt_instances.bboxes = bboxes
+            
+        # Pack other instance-level fields
+        for key in ['labels', 'masks', 'padded_bboxes', 'padded_masks']:
+            if key in results:
+                setattr(gt_instances, key, results[key])
+                
+        data_sample.gt_instances = gt_instances
+        
+        # Pack gt_tokens for recognition head (tokens)
         gt_tokens = LabelData()
         tokens = results.get('tokens', [])
         if tokens:
             assert isinstance(tokens, list), "tokens should be a list of tokens."
             assert all(isinstance(token, str) for token in tokens), "All tokens should be strings."
             gt_tokens.item = tokens
+            
+        # Pack token-level fields
+        for key in ['padded_indexes']:
+            if key in results:
+                setattr(gt_tokens, key, results[key])
+                
         data_sample.gt_tokens = gt_tokens
 
         # Pack meta info

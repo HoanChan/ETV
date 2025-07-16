@@ -1,12 +1,9 @@
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 import torch
 import numpy as np
-
+from mmengine.structures import InstanceData, LabelData
 from mmocr.registry import MODELS, TASK_UTILS
-from mmocr.models.common.dictionary import Dictionary
-from mmocr.structures import TextRecogDataSample
-from structures.token_recog_data_sample import TokenRecogDataSample
-
+from structures.table_master_data_sample import TableMasterDataSample
 
 @MODELS.register_module()
 class TableMasterPostprocessor:
@@ -46,8 +43,8 @@ class TableMasterPostprocessor:
         
     def __call__(self, 
                  outputs: Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]],
-                 data_samples: Optional[Sequence[TokenRecogDataSample]] = None
-                 ) -> Sequence[TokenRecogDataSample]:
+                 data_samples: Optional[Sequence[TableMasterDataSample]] = None
+                 ) -> Sequence[TableMasterDataSample]:
         """Process outputs from TableMaster decoder.
         
         Args:
@@ -57,7 +54,7 @@ class TableMasterPostprocessor:
             data_samples: List of data samples with metadata
             
         Returns:
-            List of TokenRecogDataSample with prediction results
+            List of TableMasterDataSample with prediction results
         """
         # Handle different input formats
         if isinstance(outputs, tuple):
@@ -68,34 +65,38 @@ class TableMasterPostprocessor:
             
         # Process classification output
         str_indexes, str_scores = self._tensor2idx(cls_output)
-        strings = []
+        tokens = []
         for str_idx in str_indexes:
-            strings.append(self.dictionary.idx2str(str_idx))
+            tokens.append(self.dictionary.idx2str(str_idx))
         scores = self._get_avg_scores(str_scores)
         
         # Process bbox output if available
         if bbox_output is not None:
-            pred_bbox_masks = self._get_pred_bbox_mask(strings)
+            pred_bbox_masks = self._get_pred_bbox_mask(tokens)
             pred_bboxes = self._decode_bboxes(bbox_output, pred_bbox_masks, data_samples)
-            pred_bboxes = self._adjust_bboxes_len(pred_bboxes, strings)
+            pred_bboxes = self._adjust_bboxes_len(pred_bboxes, tokens)
         else:
-            pred_bboxes = [None] * len(strings)
+            pred_bboxes = [None] * len(tokens)
         
         # Create result data samples
         results = []
-        for i, (string, score, pred_bbox) in enumerate(zip(strings, scores, pred_bboxes)):
+        for i, (token, bbox, score) in enumerate(zip(tokens, pred_bboxes, scores)):
             if data_samples is not None:
                 data_sample = data_samples[i]
             else:
-                data_sample = TokenRecogDataSample()
+                data_sample = TableMasterDataSample()
                 
-            # Set prediction results
-            data_sample.pred_text = string
-            data_sample.pred_score = score
+            # Create prediction tokens (LabelData for recognition head)
+            pred_tokens = LabelData()
+            pred_tokens.item = token
+            pred_tokens.scores = score
+            data_sample.pred_tokens = pred_tokens
             
-            # Set bbox if available
-            if pred_bbox is not None:
-                data_sample.pred_bbox = pred_bbox
+            # Create prediction instances (InstanceData for detection head)
+            if bbox is not None:
+                pred_instances = InstanceData()
+                pred_instances.bboxes = bbox
+                data_sample.pred_instances = pred_instances
                 
             results.append(data_sample)
             
@@ -162,7 +163,7 @@ class TableMasterPostprocessor:
     def _decode_bboxes(self, 
                       outputs_bbox: torch.Tensor, 
                       pred_bbox_masks: List[List[int]], 
-                      data_samples: Sequence[TokenRecogDataSample]) -> List[np.ndarray]:
+                      data_samples: Sequence[TableMasterDataSample]) -> List[np.ndarray]:
         """Decode bbox predictions."""
         pred_bboxes = []
         

@@ -3,7 +3,7 @@ from typing import Dict
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 
 @MODELS.register_module()
 class TableL1Loss(nn.Module):
@@ -42,14 +42,14 @@ class TableL1Loss(nn.Module):
         # Build L1 loss with sum reduction
         self.l1_loss = nn.L1Loss(reduction=reduction)
 
-    def forward(self, outputs: torch.Tensor, data_samples: list[TokenRecogDataSample], **kwargs) -> Dict[str, torch.Tensor]:
+    def forward(self, outputs: torch.Tensor, data_samples: list[TableMasterDataSample], **kwargs) -> Dict[str, torch.Tensor]:
         """
         Compute the L1 loss for table bounding boxes.
         
         Args:
             outputs (torch.Tensor): Predicted bounding boxes with shape (B, L, 4),
                 where B is the batch size, L is the sequence length, and 4 represents (x, y, width, height).
-            data_samples (list[TokenRecogDataSample]): List of samples containing ground truth information,
+            data_samples (list[TableMasterDataSample]): List of samples containing ground truth information,
                 including 'bboxes' and 'masks' fields.
             **kwargs: Additional arguments (not used).
         
@@ -58,9 +58,9 @@ class TableL1Loss(nn.Module):
                 - 'loss_horizon_bbox': L1 loss for horizontal coordinates (x, width)
                 - 'loss_vertical_bbox': L1 loss for vertical coordinates (y, height)
         """
-        # Extract ground truth tokens and bounding boxes from data samples
-        bboxes = torch.stack([s.metainfo['padded_bboxes'] for s in data_samples])
-        masks = torch.stack([s.metainfo['padded_masks'] for s in data_samples])
+        # Extract ground truth bboxes from data samples (detection head)
+        bboxes = torch.stack([s.gt_instances.padded_bboxes for s in data_samples])
+        masks = torch.stack([s.gt_instances.padded_masks for s in data_samples])
         # Extract targets starting from index 1 to align with predictions
         bboxes = bboxes[:, 1:, :].to(outputs.device)  # B x L x 4
         masks = masks[:, 1:].unsqueeze(-1).to(outputs.device)  # B x L x 1

@@ -6,7 +6,7 @@ from mmocr.registry import TRANSFORMS
 from mmocr.registry import TASK_UTILS
 from mmocr.models.common.dictionary import Dictionary
 
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 
 @TRANSFORMS.register_module()
 class PadData(BaseTransform):
@@ -62,7 +62,7 @@ class PadData(BaseTransform):
 
     def transform(self, results: dict) -> dict:
         """
-        Pad the token and bounding box data in a TokenRecogDataSample.
+        Pad the token and bounding box data in a TableMasterDataSample.
 
         This method processes the input data sample by:
             - Padding the token indices to the specified max_seq_len, adding start/end tokens if needed, and storing both the original and padded indices.
@@ -70,14 +70,14 @@ class PadData(BaseTransform):
             - Marking the sample as processed to avoid redundant work.
 
         Args:
-            data_sample (TokenRecogDataSample): The data sample to be transformed. Should contain 'gt_tokens', and optionally 'bboxes' and 'masks'.
+            data_sample (TableMasterDataSample): The data sample to be transformed. Should contain 'gt_tokens', and 'gt_instances'.
 
         Returns:
-            TokenRecogDataSample: The transformed data sample with padded tokens and bboxes/masks.
+            TableMasterDataSample: The transformed data sample with padded tokens and bboxes/masks.
         """
         # Pad tokens if present
         data_sample = results.get('data_samples', None)
-        assert isinstance(data_sample, TokenRecogDataSample), f"data_sample should be an instance of TokenRecogDataSample, but got {type(data_sample)}"
+        assert isinstance(data_sample, TableMasterDataSample), f"data_sample should be an instance of TableMasterDataSample, but got {type(data_sample)}"
         if data_sample.get('have_padded_indexes', False):
             pass
         else:

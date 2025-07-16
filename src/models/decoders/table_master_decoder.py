@@ -8,7 +8,7 @@ from mmocr.models.common.dictionary import Dictionary
 from mmocr.models.common.modules import PositionalEncoding
 from mmocr.models.textrecog.decoders.base import BaseDecoder
 
-from structures.token_recog_data_sample import TokenRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 from ..layers.decoder_layer import DecoderLayer, Embeddings, clones
 
 @MODELS.register_module()
@@ -170,15 +170,15 @@ class TableMasterDecoder(BaseDecoder):
     def forward_train(self,
                       feat: Optional[torch.Tensor] = None,
                       out_enc: torch.Tensor = None,
-                      data_samples: Sequence[TokenRecogDataSample] = None
+                      data_samples: Sequence[TableMasterDataSample] = None
                       ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward for training. Source mask will not be used here.
 
         Args:
             feat (Tensor, optional): Input feature map from backbone.
             out_enc (Tensor): Feature from encoder with positional encoding applied.
-            data_samples (list[TokenRecogDataSample]): Batch of
-                TokenRecogDataSample, containing gt_tokens and valid_ratio
+            data_samples (list[TableMasterDataSample]): Batch of
+                TableMasterDataSample, containing gt_tokens and gt_instances
                 information.
 
         Returns:
@@ -205,14 +205,14 @@ class TableMasterDecoder(BaseDecoder):
     def forward_test(self,
                      feat: Optional[torch.Tensor] = None,
                      out_enc: torch.Tensor = None,
-                     data_samples: Sequence[TokenRecogDataSample] = None
+                     data_samples: Sequence[TableMasterDataSample] = None
                      ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward for testing.
 
         Args:
             feat (Tensor, optional): Input feature map from backbone.
             out_enc (Tensor): Feature from encoder with positional encoding applied.
-            data_samples (list[TokenRecogDataSample]): Unused.
+            data_samples (list[TableMasterDataSample]): Unused.
 
         Returns:
             Tuple[Tensor, Tensor]: Character probabilities and bbox outputs.
@@ -247,8 +247,8 @@ class TableMasterDecoder(BaseDecoder):
     def predict(self,
                 feat: Optional[torch.Tensor] = None,
                 out_enc: Optional[torch.Tensor] = None,
-                data_samples: Optional[Sequence[TokenRecogDataSample]] = None
-                ) -> Sequence[TokenRecogDataSample]:
+                data_samples: Optional[Sequence[TableMasterDataSample]] = None
+                ) -> Sequence[TableMasterDataSample]:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
@@ -257,13 +257,12 @@ class TableMasterDecoder(BaseDecoder):
                 to None.
             out_enc (Tensor, optional): Features from the encoder.
                 Defaults to None.
-            data_samples (list[TokenRecogDataSample], optional): A list of
+            data_samples (list[TableMasterDataSample], optional): A list of
                 N datasamples, containing meta information and gold
                 annotations for each of the images. Defaults to None.
 
         Returns:
-            list[TokenRecogDataSample]: A list of N datasamples of prediction
-            results. Results are stored in ``pred_text``.
+            list[TableMasterDataSample]: A list of N datasamples of prediction results.
         """
         # Get raw predictions from forward_test
         cls_output, bbox_output = self.forward_test(feat, out_enc, data_samples)
@@ -274,7 +273,7 @@ class TableMasterDecoder(BaseDecoder):
     def loss(self,
              feat: Optional[torch.Tensor] = None,
              out_enc: Optional[torch.Tensor] = None,
-             data_samples: Optional[Sequence[TokenRecogDataSample]] = None
+             data_samples: Optional[Sequence[TableMasterDataSample]] = None
              ) -> Dict:
         """Calculate losses from a batch of inputs and data samples.
 
@@ -283,7 +282,7 @@ class TableMasterDecoder(BaseDecoder):
                 to None.
             out_enc (Tensor, optional): Features from the encoder.
                 Defaults to None.
-            data_samples (list[TextRecogDataSample], optional): A list of
+            data_samples (list[TableMasterDataSample], optional): A list of
                 N datasamples, containing meta information and gold
                 annotations for each of the images. Defaults to None.
 

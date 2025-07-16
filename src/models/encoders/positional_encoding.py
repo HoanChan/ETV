@@ -1,15 +1,11 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
 import math
 from typing import Dict, List, Optional, Sequence, Union
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
 from mmocr.registry import MODELS
-from mmocr.structures import TextRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 from mmocr.models.textrecog.encoders.base import BaseEncoder
-
 
 @MODELS.register_module()
 class PositionalEncoding(BaseEncoder):
@@ -43,14 +39,14 @@ class PositionalEncoding(BaseEncoder):
 
     def forward(self, 
                 feat: torch.Tensor,
-                data_samples: Optional[Sequence[TextRecogDataSample]] = None,
+                data_samples: Optional[Sequence[TableMasterDataSample]] = None,
                 **kwargs) -> torch.Tensor:
         """Forward function.
         
         Args:
             feat (torch.Tensor): Input feature tensor.
-            data_samples (Sequence[TextRecogDataSample], optional): Batch of
-                TextRecogDataSample. Defaults to None.
+            data_samples (Sequence[TableMasterDataSample], optional): Batch of
+                TableMasterDataSample. Defaults to None.
                 
         Returns:
             torch.Tensor: Output tensor with positional encoding added.
@@ -61,4 +57,3 @@ class PositionalEncoding(BaseEncoder):
             feat = feat.permute((0,2,1))
         feat = feat + self.pe[:, :feat.size(1)] # pe 1*5000*512
         return self.dropout(feat)
-

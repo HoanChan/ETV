@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from mmocr.registry import MODELS
 from mmocr.models.textrecog.postprocessors.base import BaseTextRecogPostprocessor
-from mmocr.structures import TextRecogDataSample
+from structures.table_master_data_sample import TableMasterDataSample
 
 @MODELS.register_module()
 class TableStructurePostprocessor(BaseTextRecogPostprocessor):
@@ -15,7 +15,7 @@ class TableStructurePostprocessor(BaseTextRecogPostprocessor):
         if self.start_end_same:
             raise AssertionError("TableMaster requires start_end_same=False")
 
-    def get_single_prediction(self, probs: torch.Tensor, data_sample: Optional[TextRecogDataSample] = None) -> Tuple[List[int], List[float]]:
+    def get_single_prediction(self, probs: torch.Tensor, data_sample: Optional[TableMasterDataSample] = None) -> Tuple[List[int], List[float]]:
         char_indexes, char_scores = self._tensor2idx(probs.unsqueeze(0))
         return char_indexes[0], char_scores[0]
 
@@ -63,7 +63,7 @@ class TableStructurePostprocessor(BaseTextRecogPostprocessor):
             pred_bbox_masks.append(pred_bbox_mask)
         return pred_bbox_masks
 
-    def _decode_bboxes(self, outputs_bbox: torch.Tensor, pred_bbox_masks: List[List[int]], data_samples: Sequence[TextRecogDataSample]) -> List[np.ndarray]:
+    def _decode_bboxes(self, outputs_bbox: torch.Tensor, pred_bbox_masks: List[List[int]], data_samples: Sequence[TableMasterDataSample]) -> List[np.ndarray]:
         pred_bboxes = []
         for output_bbox, pred_bbox_mask, data_sample in zip(outputs_bbox, pred_bbox_masks, data_samples):
             output_bbox = output_bbox.cpu().numpy()

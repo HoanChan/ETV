@@ -99,47 +99,39 @@ class TEDSMetric(BaseMetric):
         html_content = ""
         prefix = "pred" if is_prediction else "gt"
         
-        # Priority 1: Handle tokens + cells format (TableMASTER style)
-        if f'{prefix}_text' in sample and f'{prefix}_cells' in sample:
-            pred_text = sample.get(f'{prefix}_text', '')
+        # Access through tokens (LabelData) and instances (InstanceData) structure
+        tokens_key = f'{prefix}_tokens'
+        instances_key = f'{prefix}_instances'
+        
+        pred_tokens = ""
+        pred_cells = []
+        
+        if tokens_key in sample:
+            tokens_obj = sample[tokens_key]
+            pred_tokens = getattr(tokens_obj, 'item', '') if hasattr(tokens_obj, 'item') else ''
+            
+        if instances_key in sample:
+            instances_obj = sample[instances_key]
+            pred_cells = getattr(instances_obj, 'cells', []) if hasattr(instances_obj, 'cells') else []
+        
+        # Fallback to old structure if needed
+        if not pred_tokens:
+            pred_tokens = sample.get(f'{prefix}_tokens', '')
+        if not pred_cells:
             pred_cells = sample.get(f'{prefix}_cells', [])
-            
-            # Extract from dict format if needed
-            if isinstance(pred_text, dict):
-                pred_text = pred_text.get('item', '')
-            if isinstance(pred_cells, dict):
-                pred_cells = pred_cells.get('item', [])
-            
-            # Convert to string and ensure list
-            pred_text = str(pred_text) if pred_text else ''
-            pred_cells = pred_cells if isinstance(pred_cells, list) else []
-            
-            if pred_text and pred_cells:
-                html_content = self._process_tokens_to_html(pred_text, pred_cells)
         
-        # Priority 2: Direct table format
-        elif f'{prefix}_table' in sample:
-            table_data = sample.get(f'{prefix}_table', {})
-            html_content = table_data.get('html', '') if isinstance(table_data, dict) else ''
+        # Extract from dict format if needed
+        if isinstance(pred_tokens, dict):
+            pred_tokens = pred_tokens.get('item', '')
+        if isinstance(pred_cells, dict):
+            pred_cells = pred_cells.get('item', [])
         
-        # Priority 3: Direct text format  
-        elif f'{prefix}_text' in sample:
-            text_data = sample.get(f'{prefix}_text', '')
-            if isinstance(text_data, dict):
-                html_content = text_data.get('item', '')
-            else:
-                html_content = str(text_data) if text_data else ''
+        # Convert to string and ensure list
+        pred_tokens = str(pred_tokens) if pred_tokens else ''
+        pred_cells = pred_cells if isinstance(pred_cells, list) else []
         
-        # Priority 4: Instances format
-        elif f'{prefix}_instances' in sample:
-            instances = sample.get(f'{prefix}_instances')
-            if instances is not None:
-                if hasattr(instances, 'html'):
-                    html_content = instances.html
-                elif hasattr(instances, 'get'):
-                    html_content = instances.get('html', '')
-                elif isinstance(instances, dict):
-                    html_content = instances.get('html', '')
+        if pred_tokens and pred_cells:
+            html_content = self._process_tokens_to_html(pred_tokens, pred_cells)
         
         # Post-process HTML
         if html_content and not html_content.startswith('<html>'):
@@ -230,18 +222,18 @@ class TEDSMetric(BaseMetric):
         except Exception:
             return 0.0
 
-    def _process_tokens_to_html(self, pred_text: str, pred_cells: list) -> str:
+    def _process_tokens_to_html(self, pred_tokens: str, pred_cells: list) -> str:
         """Process tokens and cells to HTML using mmocr_teds compatible method.
         
         Args:
-            pred_text (str): Comma-separated structure tokens
+            pred_tokens (str): Comma-separated structure tokens
             pred_cells (list): List of cell content strings
             
         Returns:
             str: Processed HTML string
         """
         # Convert text to token list
-        master_token_list = text_to_list(pred_text)
+        master_token_list = text_to_list(pred_tokens)
         
         # Insert cell content into structure tokens
         html = insert_text_to_token(master_token_list, pred_cells)

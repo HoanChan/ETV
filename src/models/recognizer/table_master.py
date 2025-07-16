@@ -1,10 +1,12 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict
 import torch
 import torch.nn as nn
 from mmocr.registry import MODELS
-from mmocr.utils.typing_utils import (ConfigType, InitConfigType, OptConfigType, OptRecSampleList, RecForwardResults, RecSampleList)
+from typing import Dict, Optional, Tuple, Union
+from mmocr.utils.typing_utils import ConfigType, InitConfigType, OptConfigType
 from mmocr.models.textrecog.recognizers.base import BaseRecognizer
+from traitlets import List
+from structures.table_master_data_sample import TableMasterDataSample
 
 @MODELS.register_module()
 class TableMaster(BaseRecognizer):
@@ -75,13 +77,13 @@ class TableMaster(BaseRecognizer):
             inputs = self.backbone(inputs)
         return inputs
 
-    def loss(self, inputs: torch.Tensor, data_samples: RecSampleList, **kwargs) -> Dict:
+    def loss(self, inputs: torch.Tensor, data_samples: List[TableMasterDataSample], **kwargs) -> Dict:
         """Calculate losses from a batch of inputs and data samples.
         
         Args:
             inputs (tensor): Input images of shape (N, C, H, W).
                 Typically these should be mean centered and std scaled.
-            data_samples (list[TextRecogDataSample]): A list of N
+            data_samples (list[TableMasterDataSample]): A list of N
                 datasamples, containing meta information and gold
                 annotations for each of the images.
 
@@ -108,20 +110,20 @@ class TableMaster(BaseRecognizer):
 
         return decoder_losses
 
-    def predict(self, inputs: torch.Tensor, data_samples: RecSampleList,
-                **kwargs) -> RecSampleList:
+    def predict(self, inputs: torch.Tensor, data_samples: List[TableMasterDataSample],
+                **kwargs) -> List[TableMasterDataSample]:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
         Args:
             inputs (torch.Tensor): Image input tensor.
-            data_samples (list[TextRecogDataSample]): A list of N datasamples,
+            data_samples (list[TableMasterDataSample]): A list of N datasamples,
                 containing meta information and gold annotations for each of
                 the images.
 
         Returns:
-            list[TextRecogDataSample]:  A list of N datasamples of prediction
-            results. Results are stored in ``pred_text``.
+            list[TableMasterDataSample]:  A list of N datasamples of prediction
+            results. Results are stored in ``pred_instances``.
         """
         feat = self.extract_feat(inputs)
         if isinstance(feat, (list, tuple)):
@@ -137,24 +139,24 @@ class TableMaster(BaseRecognizer):
         # Process predictions and add bbox results
         results = []
         for i, (pred_sample, data_sample) in enumerate(zip(predictions, data_samples)):
-            # Extract text, score, and bbox from prediction
-            if hasattr(pred_sample, 'pred_text'):
-                text = pred_sample.pred_text  # Already a string
-                score = getattr(pred_sample, 'pred_score', None)
-                if score is not None:
-                    score = score.item() if hasattr(score, 'item') else score
-                else:
-                    score = 1.0
-            else:
-                text = ""
-                score = 0.0
+            # Extract token and score from prediction tokens (recognition head)
+            token = ""
+            score = 0.0
+            if hasattr(pred_sample, 'pred_tokens'):
+                if hasattr(pred_sample.pred_tokens, 'item'):
+                    token = pred_sample.pred_tokens.item
+                score = getattr(pred_sample.pred_tokens, 'scores', 0.0)
+                if hasattr(score, 'item'):
+                    score = score.item()
+            
+            # Extract bbox from prediction instances (detection head)
+            bbox = None
+            if hasattr(pred_sample, 'pred_instances') and hasattr(pred_sample.pred_instances, 'bboxes'):
+                bbox = pred_sample.pred_instances.bboxes
+                if bbox is not None:
+                    bbox = bbox.cpu().numpy() if hasattr(bbox, 'cpu') else bbox
 
-            # Get bbox predictions if available
-            bbox = getattr(pred_sample, 'pred_bbox', None)
-            if bbox is not None:
-                bbox = bbox.cpu().numpy() if hasattr(bbox, 'cpu') else bbox
-
-            result = dict(text=text, score=score, bbox=bbox)
+            result = dict(token=token, score=score, bbox=bbox)
             results.append(result)
 
         # Optional: visualize predicted bboxes
@@ -164,14 +166,14 @@ class TableMaster(BaseRecognizer):
 
     def _forward(self,
                  inputs: torch.Tensor,
-                 data_samples: OptRecSampleList = None,
-                 **kwargs) -> RecForwardResults:
+                 data_samples: Optional[List[TableMasterDataSample]] = None,
+                 **kwargs) -> Union[Dict[str, torch.Tensor], List[TableMasterDataSample], Tuple[torch.Tensor], torch.Tensor]:
         """Network forward process. Usually includes backbone, encoder and
         decoder forward without any post-processing.
 
          Args:
             inputs (Tensor): Inputs with shape (N, C, H, W).
-            data_samples (list[TextRecogDataSample]): A list of N
+            data_samples (list[TableMasterDataSample]): A list of N
                 datasamples, containing meta information and gold
                 annotations for each of the images.
 
