@@ -76,14 +76,11 @@ class PackInputs(BaseTransform):
                 
         data_sample.gt_instances = gt_instances
         
-        # Pack padded data separately to avoid length conflicts
-        padded_data = LabelData()
-        for key in ['padded_bboxes', 'padded_masks', 'have_padded_bboxes']:
-            if key in results:
-                setattr(padded_data, key, results[key])
-        
-        if hasattr(padded_data, 'padded_bboxes') or hasattr(padded_data, 'padded_masks'):
-            data_sample.padded_data = padded_data
+        # Pack padded bboxes/masks directly into gt_instances (for loss computation)
+        if 'padded_bboxes' in results:
+            gt_instances.padded_bboxes = results['padded_bboxes']
+        if 'padded_masks' in results:
+            gt_instances.padded_masks = results['padded_masks']
         
         # Pack gt_tokens for recognition head (tokens)
         gt_tokens = LabelData()
@@ -107,7 +104,7 @@ class PackInputs(BaseTransform):
             else:
                 img_meta[key] = results.get(key, None)
         
-        # Pack additional meta info from padding/encoding steps
+        # Pack additional meta info from transforms
         for key in ['have_normalized_bboxes', 'have_padded_indexes', 'have_padded_bboxes']:
             if key in results:
                 img_meta[key] = results[key]
