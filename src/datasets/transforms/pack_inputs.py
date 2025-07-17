@@ -67,14 +67,23 @@ class PackInputs(BaseTransform):
         # Pack bboxes if available
         bboxes = results.get('bboxes', None)
         if bboxes is not None:
-            gt_instances.bboxes = bboxes
+            gt_instances.set_metainfo({'bboxes': bboxes})
             
-        # Pack other instance-level fields
-        for key in ['labels', 'masks', 'padded_bboxes', 'padded_masks']:
+        # Pack other instance-level fields (only non-padded data)
+        for key in ['labels', 'masks']:
             if key in results:
                 setattr(gt_instances, key, results[key])
                 
         data_sample.gt_instances = gt_instances
+        
+        # Pack padded data separately to avoid length conflicts
+        padded_data = LabelData()
+        for key in ['padded_bboxes', 'padded_masks', 'have_padded_bboxes']:
+            if key in results:
+                setattr(padded_data, key, results[key])
+        
+        if hasattr(padded_data, 'padded_bboxes') or hasattr(padded_data, 'padded_masks'):
+            data_sample.padded_data = padded_data
         
         # Pack gt_tokens for recognition head (tokens)
         gt_tokens = LabelData()
@@ -85,7 +94,7 @@ class PackInputs(BaseTransform):
             gt_tokens.item = tokens
             
         # Pack token-level fields
-        for key in ['padded_indexes']:
+        for key in ['padded_indexes', 'indexes', 'have_padded_indexes']:
             if key in results:
                 setattr(gt_tokens, key, results[key])
                 
@@ -97,6 +106,12 @@ class PackInputs(BaseTransform):
                 img_meta[key] = results.get('valid_ratio', 1)
             else:
                 img_meta[key] = results.get(key, None)
+        
+        # Pack additional meta info from padding/encoding steps
+        for key in ['have_normalized_bboxes', 'have_padded_indexes', 'have_padded_bboxes']:
+            if key in results:
+                img_meta[key] = results[key]
+                
         data_sample.set_metainfo(img_meta)
         packed_results['data_samples'] = data_sample
 

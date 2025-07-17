@@ -52,6 +52,17 @@ class TableResize(Resize):
             
         super()._resize_img(results)
 
+    def _resize_bboxes(self, results: Dict) -> None:
+        """Resize bboxes using parent's logic, with special handling for img_info structure."""
+        # Handle special case for img_info structure (from old implementation)
+        if 'bboxes' in results.keys() and results['bboxes'] is not None:
+            results['gt_bboxes'] = results['bboxes'] # Move bboxes to gt_bboxes temporarily for parent processing
+            super()._resize_bboxes(results) # Use parent's resize logic
+            results['bboxes'] = results['gt_bboxes'] # Move back to structure
+            results.pop('gt_bboxes', None) # Clean up temporary gt_bboxes
+        else:
+            super()._resize_bboxes(results)
+
     def __repr__(self) -> str:
         repr_str = self.__class__.__name__
         repr_str += f'(min_size={self.min_size}, long_size={self.long_size})'

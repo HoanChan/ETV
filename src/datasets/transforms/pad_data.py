@@ -1,12 +1,10 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
-from typing import Dict, Optional, Sequence, Union
 import torch
+from typing import Dict, Union
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
 from mmocr.registry import TASK_UTILS
 from mmocr.models.common.dictionary import Dictionary
-
-from structures.table_master_data_sample import TableMasterDataSample
 
 @TRANSFORMS.register_module()
 class PadData(BaseTransform):
@@ -62,37 +60,38 @@ class PadData(BaseTransform):
 
     def transform(self, results: dict) -> dict:
         """
-        Pad the token and bounding box data in a TableMasterDataSample.
+        Pad the token and bounding box data in the input results.
 
-        This method processes the input data sample by:
+        This method processes the input data by:
             - Padding the token indices to the specified max_seq_len, adding start/end tokens if needed, and storing both the original and padded indices.
             - Padding the bounding boxes and masks to max_bbox_len, filling with zeros.
-            - Marking the sample as processed to avoid redundant work.
 
         Args:
-            data_sample (TableMasterDataSample): The data sample to be transformed. Should contain 'gt_tokens', and 'gt_instances'.
+            results (dict): Dictionary containing 'tokens', 'bboxes', and 'masks' information.
 
         Returns:
-            TableMasterDataSample: The transformed data sample with padded tokens and bboxes/masks.
+            dict: The transformed results dictionary with padded tokens and bboxes/masks.
         """
-        # Pad tokens if present
-        data_sample = results.get('data_samples', None)
-        assert isinstance(data_sample, TableMasterDataSample), f"data_sample should be an instance of TableMasterDataSample, but got {type(data_sample)}"
-        if data_sample.get('have_padded_indexes', False):
-            pass
-        else:
-            # gt_tokens should already be token indices, not strings
-            if isinstance(data_sample.gt_tokens, torch.Tensor):
-                # If already tensor, squeeze to 1D and convert to list for processing
-                tokens = data_sample.gt_tokens.squeeze().tolist()
+        # Pad tokens
+        tokens = results.get('tokens')
+        if tokens is not None:
+            # Check if tokens is a list of strings (normal case)
+            if isinstance(tokens, (list, tuple)) and tokens and isinstance(tokens[0], str):
+                # Convert list of token strings to comma-separated string for str2idx
+                tokens_str = ','.join(tokens)
+                tokens = self.dictionary.str2idx(tokens_str)
+            elif isinstance(tokens, torch.Tensor):
+                # If already tensor, squeeze to 1D and convert to list
+                tokens = tokens.squeeze().tolist()
                 if isinstance(tokens, int):  # Single token case
                     tokens = [tokens]
-            elif isinstance(data_sample.gt_tokens, (list, tuple)):
-                # If list/tuple of token indices
-                tokens = list(data_sample.gt_tokens)
+            elif isinstance(tokens, (list, tuple)):
+                # If already indices, just convert to list
+                tokens = list(tokens)
             else:
-                # If it's a list of tokens, convert to indices
-                tokens = self.dictionary.str2idx(str(data_sample.gt_tokens))
+                # Fallback - should not happen
+                print(f"Warning: unexpected token type: {type(tokens)}")
+                tokens = []
 
             indexes = torch.LongTensor(tokens)
             # Create target sequence with start/end tokens
@@ -121,27 +120,22 @@ class PadData(BaseTransform):
             else:
                 padded_indexes = src_target
 
-            # Store processed targets in gt_tokens object
-            data_sample.gt_tokens.indexes = indexes
-            data_sample.gt_tokens.padded_indexes = padded_indexes
+            # Store processed targets
+            results['indexes'] = indexes
+            results['padded_indexes'] = padded_indexes
 
-            # Mark as processed
-            data_sample.set_metainfo({'have_padded_indexes':True})
-
-        # Pad bboxes and masks if present
-        if data_sample.get('have_padded_bboxes', False):
-            pass
-        else:
-            bboxes = data_sample.get('bboxes')
-            masks = data_sample.get('masks')
-            bbox_tensor = torch.zeros((self.max_bbox_len, 4), dtype=torch.float32)
-            bbox_tensor[:min(len(bboxes), self.max_bbox_len)] = torch.tensor(bboxes[:self.max_bbox_len], dtype=torch.float32)
-            mask_tensor = torch.zeros(self.max_bbox_len, dtype=torch.float32)
-            mask_tensor[:min(len(masks), self.max_bbox_len)] = torch.tensor(masks[:self.max_bbox_len], dtype=torch.float32)
-            data_sample.set_metainfo({'padded_bboxes':bbox_tensor})
-            data_sample.set_metainfo({'padded_masks':mask_tensor})
-            # Mark as processed
-            data_sample.set_metainfo({'have_padded_bboxes':True})
+        # Pad bboxes and masks
+        bboxes = results.get('bboxes', [])
+        masks = results.get('masks', [])
+        
+        bbox_tensor = torch.zeros((self.max_bbox_len, 4), dtype=torch.float32)
+        bbox_tensor[:min(len(bboxes), self.max_bbox_len)] = torch.tensor(bboxes[:self.max_bbox_len], dtype=torch.float32)
+        
+        mask_tensor = torch.zeros(self.max_bbox_len, dtype=torch.float32)
+        mask_tensor[:min(len(masks), self.max_bbox_len)] = torch.tensor(masks[:self.max_bbox_len], dtype=torch.float32)
+        
+        results['padded_bboxes'] = bbox_tensor
+        results['padded_masks'] = mask_tensor
 
         return results
 

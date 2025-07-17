@@ -1,13 +1,9 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
 from typing import Dict
-import os
-import cv2
 import numpy as np
 from mmcv.transforms.base import BaseTransform
 from mmocr.registry import TRANSFORMS
-
-from structures.table_master_data_sample import TableMasterDataSample
-from .transforms_utils import xyxy2xywh, normalize_bbox, xywh2xyxy
+from .transforms_utils import xyxy2xywh, normalize_bbox
 
 
 @TRANSFORMS.register_module()
@@ -36,44 +32,38 @@ class BboxEncode(BaseTransform):
         Encode and normalize bounding boxes in the input results.
 
         Args:
-            results (dict): Dictionary containing 'data_samples' with bounding box and image shape information.
+            results (dict): Dictionary containing bounding box and image shape information.
 
         Returns:
             dict: Updated results dictionary with normalized bounding boxes in xywh format.
         """
-        data_sample = results.get('data_samples', None)
-        assert isinstance(data_sample, TableMasterDataSample), f"data_sample should be an instance of TableMasterDataSample, but got {type(data_sample)}"
-        if data_sample.get('have_normalized_bboxes', False):
-            pass
-        else:
-            bboxes = data_sample.get('bboxes')
-            # If bboxes is List of Lists, convert to numpy array
-            if isinstance(bboxes, list) and all(isinstance(bbox, list) for bbox in bboxes):
-                bboxes = np.array(bboxes, dtype=np.float32)
-            # Ensure bboxes are float32
-            if bboxes.dtype != np.float32:
-                bboxes = bboxes.astype(np.float32)
-            # Convert from xyxy to xywh format
-            bboxes = xyxy2xywh(bboxes)
-            # Normalize to [0,1] range
-            img_shape = data_sample.get('img_shape')
-            bboxes = normalize_bbox(bboxes, img_shape)
             
-            # Validate bboxes are in valid range
-            is_valid = self._check_bbox_valid(bboxes)
-            if not is_valid:
-                filename = results.get('filename', 'unknown')
-                print(f'Box invalid in {filename}')
+        bboxes = results.get('bboxes')
+        assert bboxes is not None, "Input 'bboxes' is missing in results."
             
-            # Update results
-            data_sample.set_metainfo({'bboxes': bboxes})
-            data_sample.set_metainfo({'have_normalized_bboxes':True})
+        # If bboxes is List of Lists, convert to numpy array
+        if isinstance(bboxes, list) and all(isinstance(bbox, list) for bbox in bboxes):
+            bboxes = np.array(bboxes, dtype=np.float32)
+        # Ensure bboxes are float32
+        if bboxes.dtype != np.float32:
+            bboxes = bboxes.astype(np.float32)
+        # Convert from xyxy to xywh format
+        bboxes = xyxy2xywh(bboxes)
+        # Normalize to [0,1] range
+        img_shape = results.get('img_shape')
+        bboxes = normalize_bbox(bboxes, img_shape)
+        
+        # Validate bboxes are in valid range
+        assert self._check_bbox_valid(bboxes), f"Box invalid in {results.get('filename', 'unknown')}:{bboxes}"
+        
+        # Update results
+        results['bboxes'] = bboxes
 
         return results
 
     def _check_bbox_valid(self, bboxes: np.ndarray) -> bool:
         """
-        Check if all bounding box coordinates are within the valid [0, 1] range.
+        Check if all bounding box coordinates are within the valid [0, 1] range and each bbox has 4 values.
 
         Args:
             bboxes (ndarray): Normalized bounding boxes to validate.
@@ -81,16 +71,9 @@ class BboxEncode(BaseTransform):
         Returns:
             bool: True if all bounding boxes are valid, False otherwise.
         """
-        # Check if all values are between 0 and 1
-        low_valid = (bboxes >= 0.).astype(int)
-        high_valid = (bboxes <= 1.).astype(int)
-        validity_matrix = low_valid + high_valid
-        
-        for idx, bbox_validity in enumerate(validity_matrix):
-            # Each bbox should have 8 valid checks (4 coords * 2 bounds)
-            if bbox_validity.sum() != 8:
-                return False
-        return True
+        if bboxes.ndim != 2 or bboxes.shape[1] != 4:
+            return False
+        return np.all((bboxes >= 0) & (bboxes <= 1))
 
     def __repr__(self) -> str:
         repr_str = self.__class__.__name__
