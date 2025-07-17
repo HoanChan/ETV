@@ -33,16 +33,24 @@ data_pipeline = [
         max_cell_token_len=600
     ),
     dict(
-        type='TableResize', # file:///./../datasets/transforms/table_resize.py
-        keep_ratio=True,
-        long_size=480
+        type="KeyMapper", # https://github.com/open-mmlab/mmcv/blob/main/mmcv/transforms/wrappers.py#L103
+        mapping=dict(
+            img='img',
+            img_shape='img_shape',
+            gt_bboxes='bboxes',
+        ),
+        auto_remap=True, # restore original keys when done
+        transforms=[
+            dict(
+                type='Resize', # https://github.com/open-mmlab/mmocr/blob/main/mmocr/datasets/transforms/ocr_transforms.py#L501
+                scale=(480, 480),
+                keep_ratio=True,
+            ),
+        ]
     ),
     dict(
-        type='TablePad', # file:///./../datasets/transforms/table_pad.py
+        type='Pad', # https://github.com/open-mmlab/mmdetection/blob/main/mmdet/datasets/transforms/transforms.py#L705
         size=(480, 480),
-        pad_val=0,
-        return_mask=True,
-        mask_ratio=(8, 8)
     ),
     dict(type='BboxEncode'), # file:///./../datasets/transforms/bbox_encode.py
     dict(
