@@ -68,19 +68,14 @@ class PackInputs(BaseTransform):
         bboxes = results.get('bboxes', None)
         if bboxes is not None:
             gt_instances.set_metainfo({'bboxes': bboxes})
-            
-        # Pack other instance-level fields (only non-padded data)
-        for key in ['labels', 'masks']:
-            if key in results:
-                setattr(gt_instances, key, results[key])
                 
-        data_sample.gt_instances = gt_instances
-        
         # Pack padded bboxes/masks directly into gt_instances (for loss computation)
         if 'padded_bboxes' in results:
             gt_instances.padded_bboxes = results['padded_bboxes']
         if 'padded_masks' in results:
             gt_instances.padded_masks = results['padded_masks']
+
+        data_sample.gt_instances = gt_instances
         
         # Pack gt_tokens for recognition head (tokens)
         gt_tokens = LabelData()
@@ -110,11 +105,12 @@ class PackInputs(BaseTransform):
                 img_meta[key] = results[key]
                 
         data_sample.set_metainfo(img_meta)
+
         packed_results['data_samples'] = data_sample
 
         # Pack other keys
         for key in self.keys:
-            if key in results and key not in ['img', 'tokens', 'valid_ratio']:
+            if key in results and key not in ['img', 'tokens', 'bboxes', 'valid_ratio']:
                 packed_results[key] = results[key]
                 
         return packed_results
