@@ -1,60 +1,61 @@
+
 # Pack Inputs
 
 ## 7. PackInputs
 
-**Chức năng:** Transform cuối cùng trong pipeline để đóng gói toàn bộ dữ liệu đã xử lý thành format chuẩn cho model TableMaster. Tạo ra `inputs` và `data_samples` theo chuẩn mmOCR.
+**Chức năng:** Transform cuối cùng trong pipeline để đóng gói toàn bộ dữ liệu đã xử lý thành định dạng chuẩn cho model TableMaster. Tạo ra `inputs` và `data_samples` theo chuẩn mmOCR.
 
 **Đặc điểm:**
-- Đóng gói ảnh thành tensor format với normalization
+- Đóng gói ảnh thành tensor với chuẩn hóa
 - Tạo TableMasterDataSample với gt_instances và gt_tokens
 - Xử lý meta information cho training/inference
-- Hỗ trợ custom normalization parameters
-- Tương thích với mmOCR data format
+- Hỗ trợ tham số chuẩn hóa tuỳ chỉnh
+- Tương thích với định dạng dữ liệu mmOCR
 
 **Input:**
 - `img`: Ảnh đã được pad (numpy.ndarray)
-- `tokens`: Token sequences
-- `bboxes`: Bounding box sequences
-- `masks`: Mask sequences
-- `padded_indexes`: Padded token indexes
-- `padded_bboxes`: Padded bbox sequences
-- `padded_masks`: Padded mask sequences
+- `tokens`: Chuỗi token
+- `bboxes`: Chuỗi bounding box
+- `masks`: Chuỗi mask
+- `padded_indexes`: Chỉ số token đã pad
+- `padded_bboxes`: Chuỗi bbox đã pad
+- `padded_masks`: Chuỗi mask đã pad
 - Các meta information khác
 
 **Output:**
 - `inputs`: Tensor ảnh đã chuẩn hóa (torch.Tensor), input cho backbone
-- `data_samples`: TableMasterDataSample object chứa:
-  - `gt_instances`: Instance data với bboxes, masks
-  - `gt_tokens`: Token data với sequences
+- `data_samples`: Đối tượng TableMasterDataSample gồm:
+  - `gt_instances`: Dữ liệu instance với bboxes, masks
+  - `gt_tokens`: Dữ liệu token với chuỗi
   - `metainfo`: Meta information cho training/inference
 
 **Tham số cấu hình:**
 - `keys`: Danh sách keys để pack thêm. Mặc định ()
 - `meta_keys`: Danh sách meta keys để extract. Mặc định ('img_path', 'ori_shape', 'img_shape', 'pad_shape', 'valid_ratio')
-- `mean`: Mean values cho normalization. Mặc định None
-- `std`: Std values cho normalization. Mặc định None
+- `mean`: Giá trị mean cho chuẩn hóa. Mặc định None
+- `std`: Giá trị std cho chuẩn hóa. Mặc định None
 
 **Quy trình xử lý:**
 
-1. **Image Processing:**
-   - Convert ảnh thành tensor format (CHW)
-   - Áp dụng normalization với mean/std nếu có
-   - Đảm bảo contiguous memory layout
+1. **Xử lý ảnh:**
+   - Chuyển ảnh sang tensor (CHW)
+   - Áp dụng chuẩn hóa với mean/std nếu có
+   - Đảm bảo memory layout liên tục
 
-2. **Data Sample Creation:**
-   - Tạo TableMasterDataSample instance
-   - Pack gt_instances với bboxes, masks, padded data
-   - Pack gt_tokens với token sequences và indexes
+2. **Tạo Data Sample:**
+   - Tạo instance TableMasterDataSample
+   - Pack gt_instances với bboxes, masks, dữ liệu đã pad
+   - Pack gt_tokens với chuỗi token và chỉ số
 
 3. **Meta Information:**
-   - Extract meta keys từ results
-   - Thêm normalization config nếu có
+   - Extract meta keys từ kết quả
+   - Thêm cấu hình chuẩn hóa nếu có
    - Set metainfo cho data sample
 
-4. **Final Packaging:**
-   - Tạo packed_results dict
+4. **Đóng gói cuối cùng:**
+   - Tạo dict packed_results
    - Thêm inputs và data_samples
-   - Pack additional keys nếu được chỉ định
+   - Pack thêm các keys nếu được chỉ định
 
 **Ví dụ cấu hình:**
 ```python
@@ -67,7 +68,8 @@ dict(
 )
 ```
 
-**Data Sample Structure:**
+
+**Cấu trúc Data Sample:**
 ```python
 data_samples = TableMasterDataSample(
     gt_instances=InstanceData(
@@ -98,7 +100,7 @@ data_samples = TableMasterDataSample(
 - Kết thúc pipeline, truyền tới model
 
 **Lưu ý đặc biệt:**
-- Transform này là interface giữa pipeline và model
-- TableMasterDataSample structure phải match với model expectations
-- Normalization parameters phải consistent với model training
-- Meta information essential cho inference và evaluation
+- Transform này là giao diện giữa pipeline và model
+- Cấu trúc TableMasterDataSample phải khớp với yêu cầu của model
+- Tham số chuẩn hóa phải nhất quán với quá trình huấn luyện model
+- Meta information rất quan trọng cho suy luận và đánh giá

@@ -1,11 +1,11 @@
 ## Tổng quan về kiến trúc Dataset PubTabNet
 
-@import "table_dataset/README.md"
+* [table_dataset](table_dataset/README.md)
 
 ## Pipeline xử lý dữ liệu
 
-@import "overview/README.md"
+* [overview](overview/README.md)
 
 ## Chi tiết các Transforms trong pipeline
 
-@import "transforms/README.md"
+* [transforms](transforms/README.md)

@@ -1,17 +1,17 @@
 ### Danh sách các Transforms sử dụng trong pipeline
 
-@import "load_img/README.md"
+* [load_img](load_img/README.md)
 
-@import "load_tokens/README.md"
+* [load_tokens](load_tokens/README.md)
 
-@import "table_resize/README.md"
+* [table_resize](table_resize/README.md)
 
-@import "table_pad/README.md"
+* [table_pad](table_pad/README.md)
 
-@import "bbox_encode/README.md"
+* [bbox_encode](bbox_encode/README.md)
 
-@import "pad_data/README.md"
+* [pad_data](pad_data/README.md)
 
-@import "pack_inputs/README.md"
+* [pack_inputs](pack_inputs/README.md)
 
 ...
