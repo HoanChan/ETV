@@ -81,8 +81,8 @@ dict(
 ```
 
 **Quan hệ với pipeline:**
-- Nhận dữ liệu từ @import "../../../datasets/table_dataset/README.md"
-- Truyền dữ liệu tới @import "../table_resize/README.md"
+- Nhận dữ liệu từ [Table Dataset](../../../datasets/table_dataset/README.md)
+- Truyền dữ liệu tới [Table Resize](../resize/README.md)
 
 **Utilities Functions:**
 Transform này sử dụng các utility functions từ `transforms_utils.py`:

@@ -122,8 +122,8 @@ for pred in predictions:
 ```
 
 **Quan hệ với pipeline:**
-- Nhận inputs từ @import "../datasets/transforms/pack_inputs/README.md"
-- Sử dụng @import "backbones/README.md", @import "encoders/README.md", @import "decoders/README.md"
+- Nhận inputs từ [Pack Inputs](../datasets/transforms/pack_inputs/README.md)
+- Sử dụng [Backbones](backbones/README.md), [Encoders](encoders/README.md), [Decoders](decoders/README.md)
 - Outputs có thể được visualize hoặc evaluate
 
 **Lưu ý đặc biệt:**

@@ -88,9 +88,9 @@ dictionary = dict(
 - `num_classes`: Property trả về tổng số tokens
 
 **Quan hệ với pipeline:**
-- Được sử dụng trong @import "../../datasets/transforms/pad_data/README.md"
-- Được sử dụng trong @import "../decoders/README.md"
-- Được sử dụng trong @import "../postprocessors/README.md"
+- Được sử dụng trong [Pad Data](../../datasets/transforms/pad_data/README.md)
+- Được sử dụng trong [Decoders](../decoders/README.md)
+- Được sử dụng trong [Postprocessors](../postprocessors/README.md)
 
 **Lưu ý đặc biệt:**
 - Multi-character tokens khác với character-based dictionaries

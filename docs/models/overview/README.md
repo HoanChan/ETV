@@ -148,14 +148,14 @@ flowchart TD
 ### Quan hệ với Dataset Pipeline
 
 Model nhận input từ dataset pipeline:
-- @import "../../datasets/transforms/pack_inputs/README.md"
+- [Pack Inputs](../../datasets/transforms/pack_inputs/README.md)
 - TableMasterDataSample format
 - Normalized images và ground truth labels
 
 ### Evaluation
 
 Model được evaluate bằng:
-- @import "metrics/README.md"
+- [Metrics](metrics/README.md)
 - TEDS (Tree Edit Distance based Similarity)
 - Token accuracy, bbox IoU, structure consistency
 

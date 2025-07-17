@@ -94,7 +94,7 @@ data_samples = TableMasterDataSample(
 ```
 
 **Quan hệ với pipeline:**
-- Nhận dữ liệu từ @import "../pad_data/README.md"
+- Nhận dữ liệu từ [Pad Data](../pad_data/README.md)
 - Kết thúc pipeline, truyền tới model
 
 **Lưu ý đặc biệt:**

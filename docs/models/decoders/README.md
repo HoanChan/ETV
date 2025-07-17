@@ -92,9 +92,9 @@ decoder = dict(
 - **bboxes_loss:** L1 loss cho bbox regression
 
 **Quan hệ với pipeline:**
-- Nhận features từ @import "../encoders/README.md"
-- Sử dụng @import "../postprocessors/README.md" cho output processing
-- Sử dụng @import "../dictionaries/README.md" cho token mapping
+- Nhận features từ [Encoders](../encoders/README.md)
+- Sử dụng [Postprocessors](../postprocessors/README.md) cho output processing
+- Sử dụng [Dictionaries](../dictionaries/README.md) cho token mapping
 
 **Lưu ý đặc biệt:**
 - Dual-head design essential cho table structure + bbox prediction

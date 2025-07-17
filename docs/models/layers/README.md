@@ -86,8 +86,8 @@ decoder_layer = dict(
 - Gradient checkpointing support
 
 **Quan hệ với pipeline:**
-- Được sử dụng trong @import "../decoders/README.md"
-- Tích hợp trong @import "../recognizer/README.md"
+- Được sử dụng trong [Decoders](../decoders/README.md)
+- Tích hợp trong [Recognizer](../recognizer/README.md)
 - Optimized cho table recognition tasks
 
 **Lưu ý đặc biệt:**

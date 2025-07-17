@@ -54,8 +54,8 @@ encoder = dict(
 - Stable across different sequence lengths
 
 **Quan hệ với pipeline:**
-- Nhận feature maps từ @import "../backbones/README.md"
-- Truyền encoded features tới @import "../decoders/README.md"
+- Nhận feature maps từ [Backbones](../backbones/README.md)
+- Truyền encoded features tới [Decoders](../decoders/README.md)
 
 **Lưu ý đặc biệt:**
 - Essential cho Transformer-based architectures

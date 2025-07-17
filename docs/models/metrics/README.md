@@ -91,8 +91,8 @@ results = evaluator.evaluate(predictions, ground_truth)
 ```
 
 **Quan hệ với pipeline:**
-- Nhận predictions từ @import "../recognizer/README.md"
-- Sử dụng ground truth từ @import "../../datasets/table_dataset/README.md"
+- Nhận predictions từ [Recognizer](../recognizer/README.md)
+- Sử dụng ground truth từ [Table Dataset](../../datasets/table_dataset/README.md)
 - Tích hợp trong evaluation scripts
 
 **Lưu ý đặc biệt:**

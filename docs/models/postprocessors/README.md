@@ -81,9 +81,9 @@ scores = [0.95, 0.87, 0.92, ...]
 ```
 
 **Quan hệ với pipeline:**
-- Nhận outputs từ @import "../decoders/README.md"
-- Sử dụng @import "../dictionaries/README.md" cho token mapping
-- Sử dụng meta information từ @import "../../datasets/transforms/pack_inputs/README.md"
+- Nhận outputs từ [Decoders](../decoders/README.md)
+- Sử dụng [Dictionaries](../dictionaries/README.md) cho token mapping
+- Sử dụng meta information từ [Pack Inputs](../../datasets/transforms/pack_inputs/README.md)
 
 **Lưu ý đặc biệt:**
 - Denormalization process phải chính xác để get correct bbox coordinates

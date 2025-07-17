@@ -82,8 +82,8 @@ padded_masks = torch.FloatTensor([1, 1, 0, 0, ...])  # length 600
 ```
 
 **Quan hệ với pipeline:**
-- Nhận dữ liệu từ @import "../bbox_encode/README.md"
-- Truyền dữ liệu tới @import "../pack_inputs/README.md"
+- Nhận dữ liệu từ [BBox Encode](../bbox_encode/README.md)
+- Truyền dữ liệu tới [Pack Inputs](../pack_inputs/README.md)
 
 **Lưu ý đặc biệt:**
 - Transform này critical cho batch processing

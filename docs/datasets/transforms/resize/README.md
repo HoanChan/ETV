@@ -67,8 +67,8 @@ dict(
 ```
 
 **Quan hệ với pipeline:**
-- Nhận dữ liệu từ @import "../load_tokens/README.md"  
-- Truyền dữ liệu tới @import "../table_pad/README.md"
+- Nhận dữ liệu từ [Load Tokens](../load_tokens/README.md)
+- Truyền dữ liệu tới [Table Pad](../pad/README.md)
 
 **Lưu ý đặc biệt:**
 - Transform này được thiết kế đặc biệt cho table structure recognition

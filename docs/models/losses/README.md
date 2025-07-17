@@ -79,9 +79,9 @@ total_loss = lambda_horizon * horizontal_loss + lambda_vertical * vertical_loss
 ```
 
 **Quan hệ với pipeline:**
-- Được sử dụng trong @import "../decoders/README.md"
+- Được sử dụng trong [Decoders](../decoders/README.md)
 - Nhận predictions và targets từ training data
-- Tích hợp trong @import "../recognizer/README.md"
+- Tích hợp trong [Recognizer](../recognizer/README.md)
 
 **Lưu ý đặc biệt:**
 - ignore_index trong MasterTFLoss phải match với PAD token trong dictionary

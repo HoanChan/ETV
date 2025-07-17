@@ -78,8 +78,8 @@ dict(
 - Ví dụ: `mask_ratio=(8, 8)` sẽ downsample mask từ (480, 480) xuống (60, 60)
 
 **Quan hệ với pipeline:**
-- Nhận dữ liệu từ @import "../table_resize/README.md"
-- Truyền dữ liệu tới @import "../bbox_encode/README.md"
+- Nhận dữ liệu từ [Resize](../resize/README.md)
+- Truyền dữ liệu tới [BBox Encode](../bbox_encode/README.md)
 
 **Lưu ý đặc biệt:**
 - Mask được tạo để hỗ trợ attention mechanism trong model

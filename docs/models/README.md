@@ -7,38 +7,38 @@ TableMaster là một end-to-end model cho table structure recognition, sử d�
 ## Cấu trúc tài liệu
 
 ### Architecture Overview
-@import "overview/README.md"
+[Xem chi tiết: Overview](overview/README.md)
 
 ### Core Components
 
 #### 1. Backbone Networks
-@import "backbones/README.md"
+[Xem chi tiết: Backbone Networks](backbones/README.md)
 
 #### 2. Encoders
-@import "encoders/README.md"
+[Xem chi tiết: Encoders](encoders/README.md)
 
 #### 3. Decoders
-@import "decoders/README.md"
+[Xem chi tiết: Decoders](decoders/README.md)
 
 #### 4. Dictionaries
-@import "dictionaries/README.md"
+[Xem chi tiết: Dictionaries](dictionaries/README.md)
 
 #### 5. Postprocessors
-@import "postprocessors/README.md"
+[Xem chi tiết: Postprocessors](postprocessors/README.md)
 
 #### 6. Recognizers
-@import "recognizer/README.md"
+[Xem chi tiết: Recognizers](recognizer/README.md)
 
 ### Training Components
 
 #### 7. Loss Functions
-@import "losses/README.md"
+[Xem chi tiết: Loss Functions](losses/README.md)
 
 #### 8. Evaluation Metrics
-@import "metrics/README.md"
+[Xem chi tiết: Evaluation Metrics](metrics/README.md)
 
 #### 9. Neural Network Layers
-@import "layers/README.md"
+[Xem chi tiết: Neural Network Layers](layers/README.md)
 
 ## Kiến trúc tổng thể
 

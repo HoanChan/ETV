@@ -65,8 +65,8 @@ backbone = dict(
 ```
 
 **Quan hệ với pipeline:**
-- Nhận input từ @import "../../datasets/transforms/pack_inputs/README.md"
-- Truyền feature tới @import "../encoders/README.md"
+- Nhận input từ [Pack Inputs](../../datasets/transforms/pack_inputs/README.md)
+- Truyền feature tới [Encoders](../encoders/README.md)
 
 **Lưu ý đặc biệt:**
 - GCB giúp model capture long-range dependencies trong table structure
