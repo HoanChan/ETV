@@ -1,32 +1,33 @@
+
 # Recognizer
 
 ## 6. TableMaster
 
-**Chức năng:** Main recognizer class cho table structure recognition. Tích hợp tất cả components (backbone, encoder, decoder) thành một model hoàn chỉnh với dual-head architecture.
+**Chức năng:** Lớp nhận diện chính cho nhận diện cấu trúc bảng. Tích hợp tất cả các thành phần (backbone, encoder, decoder) thành một mô hình hoàn chỉnh với kiến trúc hai đầu (dual-head).
 
 **Đặc điểm:**
-- Tích hợp backbone, encoder, decoder thành end-to-end model
-- Dual-head architecture cho structure recognition và bbox regression
-- Hỗ trợ cả training và inference modes
-- Flexible component configuration
-- Tương thích với mmOCR framework
+- Tích hợp backbone, encoder, decoder thành mô hình end-to-end
+- Kiến trúc hai đầu cho nhận diện cấu trúc và hồi quy bbox
+- Hỗ trợ cả chế độ huấn luyện và suy luận
+- Cấu hình thành phần linh hoạt
+- Tương thích với framework mmOCR
 
 **Input:**
 - `inputs`: Batch tensor ảnh (torch.Tensor, shape: [N, C, H, W])
 - `data_samples`: Batch TableMasterDataSample với ground truth
 
 **Output:**
-- **Training:** Dictionary với loss values
-- **Inference:** List TableMasterDataSample với predictions
+- **Huấn luyện:** Dictionary chứa các giá trị loss
+- **Suy luận:** List TableMasterDataSample với dự đoán
 
 **Tham số cấu hình:**
-- `preprocessor`: Preprocessing module (optional)
-- `backbone`: Backbone configuration
-- `encoder`: Encoder configuration (optional)
-- `decoder`: Decoder configuration
-- `bbox_loss`: Additional bbox loss configuration (optional)
-- `data_preprocessor`: Data preprocessing config
-- `init_cfg`: Initialization configuration
+- `preprocessor`: Module tiền xử lý (tùy chọn)
+- `backbone`: Cấu hình backbone
+- `encoder`: Cấu hình encoder (tùy chọn)
+- `decoder`: Cấu hình decoder
+- `bbox_loss`: Cấu hình loss bbox bổ sung (tùy chọn)
+- `data_preprocessor`: Cấu hình tiền xử lý dữ liệu
+- `init_cfg`: Cấu hình khởi tạo
 
 **Kiến trúc tổng thể:**
 ```mermaid
@@ -44,18 +45,18 @@ flowchart TD
 
 **Quy trình xử lý:**
 
-1. **Feature Extraction:**
-   - Preprocessor (optional): TPS hoặc image preprocessing
-   - Backbone: Extract spatial features
-   - Encoder: Add positional encoding và sequence formatting
+1. **Trích xuất đặc trưng:**
+   - Preprocessor (tùy chọn): TPS hoặc tiền xử lý ảnh
+   - Backbone: Trích xuất đặc trưng không gian
+   - Encoder: Thêm positional encoding và định dạng chuỗi
 
-2. **Decoding:**
-   - Decoder: Dual-head prediction (tokens + bboxes)
-   - Loss calculation (training) hoặc postprocessing (inference)
+2. **Giải mã:**
+   - Decoder: Dự đoán hai đầu (tokens + bboxes)
+   - Tính loss (huấn luyện) hoặc hậu xử lý (suy luận)
 
-3. **Output Generation:**
-   - Training: Return loss dictionary
-   - Inference: Return predicted TableMasterDataSample
+3. **Sinh output:**
+   - Huấn luyện: Trả về dictionary loss
+   - Suy luận: Trả về TableMasterDataSample dự đoán
 
 **Ví dụ cấu hình:**
 ```python
@@ -96,7 +97,7 @@ model = dict(
 )
 ```
 
-**Training Flow:**
+**Luồng huấn luyện:**
 ```python
 # Forward pass
 losses = model.loss(inputs, data_samples)
@@ -108,13 +109,13 @@ losses['loss'].backward()
 optimizer.step()
 ```
 
-**Inference Flow:**
+**Luồng suy luận:**
 ```python
 # Forward pass
 predictions = model.predict(inputs, data_samples)
 # predictions = [TableMasterDataSample(...), ...]
 
-# Extract results
+# Trích xuất kết quả
 for pred in predictions:
     tokens = pred.pred_tokens.item
     bboxes = pred.pred_instances.bboxes
@@ -124,10 +125,10 @@ for pred in predictions:
 **Quan hệ với pipeline:**
 - Nhận inputs từ [Pack Inputs](../datasets/transforms/pack_inputs/README.md)
 - Sử dụng [Backbones](backbones/README.md), [Encoders](encoders/README.md), [Decoders](decoders/README.md)
-- Outputs có thể được visualize hoặc evaluate
+- Output có thể được visualize hoặc đánh giá
 
 **Lưu ý đặc biệt:**
-- Model architecture flexible, có thể skip encoder nếu không cần
-- Dual-head design essential cho table structure + bbox prediction
-- Data preprocessor phải consistent với training normalization
-- Component initialization important cho training stability
+- Kiến trúc model linh hoạt, có thể bỏ qua encoder nếu không cần
+- Thiết kế hai đầu rất quan trọng cho nhận diện cấu trúc bảng và dự đoán bbox
+- Data preprocessor phải nhất quán với chuẩn hóa khi huấn luyện
+- Khởi tạo thành phần quan trọng cho sự ổn định huấn luyện

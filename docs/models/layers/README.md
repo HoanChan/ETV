@@ -1,50 +1,51 @@
+
 # Layers
 
-## 9. Neural Network Layers
+## 9. Các lớp mạng nơ-ron
 
 ### 9.1 DecoderLayer
 
-**Chức năng:** Transformer decoder layer được sử dụng trong TableMasterDecoder. Tích hợp self-attention, cross-attention, và feed-forward networks.
+**Chức năng:** Lớp Transformer decoder được sử dụng trong TableMasterDecoder. Tích hợp self-attention, cross-attention và feed-forward networks.
 
 **Đặc điểm:**
-- Multi-head self-attention cho sequence modeling
-- Cross-attention với encoder features
-- Feed-forward network cho feature transformation
-- Residual connections và layer normalization
-- Configurable attention parameters
+- Multi-head self-attention cho modeling chuỗi
+- Cross-attention với đặc trưng từ encoder
+- Feed-forward network để biến đổi đặc trưng
+- Kết nối residual và layer normalization
+- Tham số attention có thể cấu hình
 
 **Input:**
-- `tgt`: Target sequence (torch.Tensor, shape: [N, T, C])
-- `memory`: Encoder memory (torch.Tensor, shape: [N, S, C])
-- `tgt_mask`: Target attention mask (torch.Tensor)
-- `memory_mask`: Memory attention mask (torch.Tensor)
+- `tgt`: Chuỗi mục tiêu (torch.Tensor, shape: [N, T, C])
+- `memory`: Bộ nhớ encoder (torch.Tensor, shape: [N, S, C])
+- `tgt_mask`: Mask attention cho chuỗi mục tiêu (torch.Tensor)
+- `memory_mask`: Mask attention cho bộ nhớ encoder (torch.Tensor)
 
 **Output:**
-- `output`: Transformed target sequence (torch.Tensor, shape: [N, T, C])
+- `output`: Chuỗi mục tiêu đã biến đổi (torch.Tensor, shape: [N, T, C])
 
 **Tham số cấu hình:**
-- `d_model`: Model dimension. Mặc định 512
-- `n_head`: Number of attention heads. Mặc định 8
-- `d_ff`: Feed-forward dimension. Mặc định 2048
-- `dropout`: Dropout rate. Mặc định 0.1
-- `activation`: Activation function. Mặc định 'relu'
+- `d_model`: Kích thước mô hình. Mặc định 512
+- `n_head`: Số lượng attention heads. Mặc định 8
+- `d_ff`: Kích thước feed-forward. Mặc định 2048
+- `dropout`: Tỉ lệ dropout. Mặc định 0.1
+- `activation`: Hàm kích hoạt. Mặc định 'relu'
 
-**Layer Components:**
+**Thành phần layer:**
 
 1. **Multi-Head Self-Attention:**
-   - Attention mechanism trong target sequence
-   - Causal masking cho sequence generation
-   - Multi-head parallel processing
+   - Cơ chế attention trong chuỗi mục tiêu
+   - Causal masking cho sinh chuỗi
+   - Xử lý song song nhiều head
 
 2. **Multi-Head Cross-Attention:**
-   - Attention giữa target sequence và encoder features
-   - Spatial attention cho table structure
-   - Feature fusion mechanism
+   - Attention giữa chuỗi mục tiêu và đặc trưng encoder
+   - Spatial attention cho cấu trúc bảng
+   - Cơ chế kết hợp đặc trưng
 
 3. **Feed-Forward Network:**
-   - Two-layer MLP với activation
-   - Feature transformation và non-linearity
-   - Residual connection
+   - MLP hai lớp với activation
+   - Biến đổi đặc trưng và phi tuyến tính
+   - Kết nối residual
 
 **Ví dụ cấu hình:**
 ```python
@@ -71,27 +72,27 @@ decoder_layer = dict(
 
 ### 9.2 TMD (TableMaster Decoder) Layer
 
-**Chức năng:** Specialized decoder layer cho TableMaster với optimizations cho table structure recognition.
+**Chức năng:** Lớp decoder chuyên biệt cho TableMaster với các tối ưu hóa cho nhận diện cấu trúc bảng.
 
 **Đặc điểm:**
-- Table-specific attention patterns
-- Optimized cho spatial relationships
-- Efficient memory usage
-- Compatible với standard transformer layers
+- Attention patterns đặc thù cho bảng
+- Tối ưu hóa cho quan hệ không gian
+- Sử dụng bộ nhớ hiệu quả
+- Tương thích với các lớp transformer tiêu chuẩn
 
-**Optimizations:**
-- Spatial attention bias cho table structure
-- Efficient attention computation
-- Memory-efficient implementation
-- Gradient checkpointing support
+**Tối ưu hóa:**
+- Spatial attention bias cho cấu trúc bảng
+- Tính attention hiệu quả
+- Triển khai tiết kiệm bộ nhớ
+- Hỗ trợ gradient checkpointing
 
 **Quan hệ với pipeline:**
 - Được sử dụng trong [Decoders](../decoders/README.md)
 - Tích hợp trong [Recognizer](../recognizer/README.md)
-- Optimized cho table recognition tasks
+- Tối ưu hóa cho các bài toán nhận diện bảng
 
 **Lưu ý đặc biệt:**
-- Attention heads và dimensions phải consistent across layers
-- Dropout rates affect training stability
-- Memory masks important cho variable sequence lengths
-- Layer normalization placement affects gradient flow
+- Attention heads và kích thước phải nhất quán giữa các layer
+- Tỉ lệ dropout ảnh hưởng đến độ ổn định huấn luyện
+- Memory mask quan trọng cho chuỗi có độ dài thay đổi
+- Vị trí layer normalization ảnh hưởng đến luồng gradient

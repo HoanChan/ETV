@@ -1,41 +1,42 @@
+
 # Dictionaries
 
 ## 4. TableMasterDictionary
 
-**Chức năng:** Dictionary class để quản lý table structure tokens và special tokens cho TableMaster model. Xử lý multi-character tokens khác với standard character-based dictionaries.
+**Chức năng:** Lớp Dictionary để quản lý các table structure tokens và special tokens cho mô hình TableMaster. Xử lý các token nhiều ký tự khác với dictionary dạng ký tự thông thường.
 
 **Đặc điểm:**
-- Quản lý table structure tokens (`<td>`, `<tr>`, `<tbody>`, etc.)
-- Hỗ trợ special tokens (`<BOS>`, `<EOS>`, `<PAD>`, `<UKN>`)
-- Multi-character token handling
-- Flexible token configuration
-- Tương thích với sequence-to-sequence models
+- Quản lý các table structure tokens (`<td>`, `<tr>`, `<tbody>`, v.v.)
+- Hỗ trợ các special tokens (`<BOS>`, `<EOS>`, `<PAD>`, `<UKN>`)
+- Xử lý token nhiều ký tự
+- Cấu hình token linh hoạt
+- Tương thích với các mô hình sequence-to-sequence
 
 **Input:**
-- `dict_file`: Đường dẫn tới structure alphabet file
-- Các token configuration parameters
+- `dict_file`: Đường dẫn tới file structure alphabet
+- Các tham số cấu hình token
 
 **Output:**
-- Dictionary instance với token mapping functions:
-  - `str2idx()`: Convert tokens thành indices
-  - `idx2str()`: Convert indices thành tokens
-  - `num_classes`: Tổng số classes/tokens
+- Đối tượng Dictionary với các hàm ánh xạ token:
+  - `str2idx()`: Chuyển token thành chỉ số
+  - `idx2str()`: Chuyển chỉ số thành token
+  - `num_classes`: Tổng số lớp/tokens
 
 **Tham số cấu hình:**
-- `dict_file`: Path tới structure alphabet file
+- `dict_file`: Đường dẫn tới file structure alphabet
 - `with_start`: Có thêm start token hay không. Mặc định False
 - `with_end`: Có thêm end token hay không. Mặc định False
-- `same_start_end`: Start và end tokens có giống nhau hay không. Mặc định False
+- `same_start_end`: Start và end token có giống nhau không. Mặc định False
 - `with_padding`: Có thêm padding token hay không. Mặc định False
 - `with_unknown`: Có thêm unknown token hay không. Mặc định False
-- `start_token`: Start token string. Mặc định '<BOS>'
-- `end_token`: End token string. Mặc định '<EOS>'
-- `start_end_token`: Combined start/end token. Mặc định '<BOS/EOS>'
-- `padding_token`: Padding token string. Mặc định '<PAD>'
-- `unknown_token`: Unknown token string. Mặc định '<UKN>'
+- `start_token`: Chuỗi start token. Mặc định '<BOS>'
+- `end_token`: Chuỗi end token. Mặc định '<EOS>'
+- `start_end_token`: Token kết hợp start/end. Mặc định '<BOS/EOS>'
+- `padding_token`: Chuỗi padding token. Mặc định '<PAD>'
+- `unknown_token`: Chuỗi unknown token. Mặc định '<UKN>'
 
-**Structure Alphabet Format:**
-File chứa danh sách structure tokens, mỗi token trên một dòng:
+**Định dạng Structure Alphabet:**
+File chứa danh sách các structure token, mỗi token một dòng:
 ```
 <table>
 </table>
@@ -52,22 +53,22 @@ File chứa danh sách structure tokens, mỗi token trên một dòng:
 ...
 ```
 
-**Token Categories:**
+**Phân loại Token:**
 1. **Table Structure Tokens:**
-   - `<table>`, `</table>`: Table boundaries
-   - `<tr>`, `</tr>`: Table rows
-   - `<td>`, `</td>`: Table cells
-   - `<thead>`, `<tbody>`: Table sections
+   - `<table>`, `</table>`: Ranh giới bảng
+   - `<tr>`, `</tr>`: Hàng của bảng
+   - `<td>`, `</td>`: Ô của bảng
+   - `<thead>`, `<tbody>`: Các phần của bảng
 
 2. **Special Tokens:**
-   - `<BOS>`: Beginning of sequence
-   - `<EOS>`: End of sequence
-   - `<PAD>`: Padding token
-   - `<UKN>`: Unknown token
+   - `<BOS>`: Bắt đầu chuỗi
+   - `<EOS>`: Kết thúc chuỗi
+   - `<PAD>`: Token padding
+   - `<UKN>`: Token không xác định
 
 3. **Empty Box Tokens:**
-   - `<eb></eb>`: Empty box token
-   - `<eb1></eb1>`: Empty box variant
+   - `<eb></eb>`: Token ô trống
+   - `<eb1></eb1>`: Biến thể ô trống
 
 **Ví dụ cấu hình:**
 ```python
@@ -82,10 +83,10 @@ dictionary = dict(
 )
 ```
 
-**Token Mapping Functions:**
-- `str2idx(tokens)`: Convert token strings thành indices
-- `idx2str(indices)`: Convert indices thành token strings
-- `num_classes`: Property trả về tổng số tokens
+**Hàm ánh xạ Token:**
+- `str2idx(tokens)`: Chuyển chuỗi token thành chỉ số
+- `idx2str(indices)`: Chuyển chỉ số thành chuỗi token
+- `num_classes`: Thuộc tính trả về tổng số token
 
 **Quan hệ với pipeline:**
 - Được sử dụng trong [Pad Data](../../datasets/transforms/pad_data/README.md)
@@ -93,7 +94,7 @@ dictionary = dict(
 - Được sử dụng trong [Postprocessors](../postprocessors/README.md)
 
 **Lưu ý đặc biệt:**
-- Multi-character tokens khác với character-based dictionaries
-- Token ordering trong dict_file affects model performance
-- Special tokens cần consistent với model architecture
-- Dictionary size affects model complexity và memory usage
+- Token nhiều ký tự khác với dictionary dạng ký tự
+- Thứ tự token trong dict_file ảnh hưởng đến hiệu năng mô hình
+- Special tokens cần nhất quán với kiến trúc mô hình
+- Kích thước dictionary ảnh hưởng đến độ phức tạp và bộ nhớ của mô hình

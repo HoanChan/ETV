@@ -87,82 +87,83 @@ flowchart TD
     style TableMasterPostprocessor.final_bboxes fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
 ```
 
-### Component Details
+
+### Chi tiết các thành phần
 
 #### 1. Backbone (TableResNetExtra)
-- **Chức năng:** Trích xuất multi-scale features từ table images
-- **Input:** Table images (N, C, H, W)
-- **Output:** Multi-scale feature maps
-- **Đặc điểm:** ResNet-based với Global Context Blocks
+- **Chức năng:** Trích xuất đặc trưng đa tỷ lệ từ ảnh bảng
+- **Input:** Ảnh bảng (N, C, H, W)
+- **Output:** Feature maps đa tỷ lệ
+- **Đặc điểm:** Dựa trên ResNet, tích hợp Global Context Blocks
 
 #### 2. Encoder (PositionalEncoding)
-- **Chức năng:** Thêm positional information vào spatial features
-- **Input:** 2D feature maps
-- **Output:** 1D sequence với positional encoding
+- **Chức năng:** Thêm thông tin vị trí vào đặc trưng không gian
+- **Input:** Feature maps 2D
+- **Output:** Chuỗi 1D với positional encoding
 - **Đặc điểm:** Sinusoidal positional encoding
 
 #### 3. Decoder (TableMasterConcatDecoder)
-- **Chức năng:** Dual-head prediction cho tokens và bboxes
-- **Input:** Encoded features + target sequences
-- **Output:** Classification logits + bbox coordinates
-- **Đặc điểm:** Transformer-based với concatenation strategy
+- **Chức năng:** Dự đoán hai đầu cho tokens và bboxes
+- **Input:** Đặc trưng đã mã hóa + chuỗi mục tiêu
+- **Output:** Logits phân loại + tọa độ bbox
+- **Đặc điểm:** Dựa trên Transformer với chiến lược nối đặc trưng
 
 #### 4. Dictionary (TableMasterDictionary)
-- **Chức năng:** Token mapping cho table structure elements
-- **Features:** Multi-character tokens, special tokens
-- **Tokens:** `<table>`, `<tr>`, `<td>`, `<eb></eb>`, etc.
+- **Chức năng:** Ánh xạ token cho các phần tử cấu trúc bảng
+- **Đặc điểm:** Token nhiều ký tự, special tokens
+- **Tokens:** `<table>`, `<tr>`, `<td>`, `<eb></eb>`, v.v.
 
 #### 5. Postprocessor (TableMasterPostprocessor)
-- **Chức năng:** Convert raw outputs thành meaningful predictions
-- **Input:** Logits + bbox coordinates
-- **Output:** Token strings + denormalized bboxes
-- **Đặc điểm:** Confidence thresholding, coordinate denormalization
+- **Chức năng:** Chuyển đổi output thô thành dự đoán có ý nghĩa
+- **Input:** Logits + tọa độ bbox
+- **Output:** Chuỗi token + bbox đã khử chuẩn hóa
+- **Đặc điểm:** Ngưỡng độ tin cậy, khử chuẩn hóa tọa độ
 
-### Training Process
+### Quy trình huấn luyện
 
-1. **Data Flow:**
-   - Images → Backbone → Encoder → Decoder
-   - Ground truth tokens/bboxes → Loss calculation
+1. **Luồng dữ liệu:**
+   - Ảnh → Backbone → Encoder → Decoder
+   - Ground truth tokens/bboxes → Tính loss
 
-2. **Loss Functions:**
-   - **MasterTFLoss:** Cross-entropy cho token classification
-   - **TableL1Loss:** L1 loss cho bbox regression
+2. **Hàm loss:**
+   - **MasterTFLoss:** Cross-entropy cho phân loại token
+   - **TableL1Loss:** L1 loss cho hồi quy bbox
 
-3. **Optimization:**
-   - Multi-task learning với token + bbox objectives
-   - Gradient balancing giữa classification và regression
+3. **Tối ưu hóa:**
+   - Học đa nhiệm với mục tiêu token + bbox
+   - Cân bằng gradient giữa phân loại và hồi quy
 
-### Inference Process
+### Quy trình suy luận
 
 1. **Forward Pass:**
-   - Image → Features → Encoded features → Predictions
+   - Ảnh → Đặc trưng → Đặc trưng đã mã hóa → Dự đoán
 
-2. **Postprocessing:**
-   - Logits → Token strings
-   - Bbox coordinates → Denormalized bounding boxes
+2. **Hậu xử lý:**
+   - Logits → Chuỗi token
+   - Tọa độ bbox → Bbox đã khử chuẩn hóa
 
 3. **Output:**
-   - Structured table representation
-   - Spatial information for cells
+   - Biểu diễn bảng có cấu trúc
+   - Thông tin không gian cho các ô
 
 ### Quan hệ với Dataset Pipeline
 
-Model nhận input từ dataset pipeline:
+Model nhận input từ pipeline dữ liệu:
 - [Pack Inputs](../../datasets/transforms/pack_inputs/README.md)
-- TableMasterDataSample format
-- Normalized images và ground truth labels
+- Định dạng TableMasterDataSample
+- Ảnh đã chuẩn hóa và ground truth labels
 
-### Evaluation
+### Đánh giá
 
-Model được evaluate bằng:
+Model được đánh giá bằng:
 - [Metrics](metrics/README.md)
 - TEDS (Tree Edit Distance based Similarity)
-- Token accuracy, bbox IoU, structure consistency
+- Độ chính xác token, bbox IoU, tính nhất quán cấu trúc
 
 ### Lưu ý đặc biệt
 
-- **Dual-head architecture** essential cho table recognition
-- **Multi-scale features** important cho spatial understanding
-- **Attention mechanism** captures table structure relationships
-- **Postprocessing** critical cho meaningful outputs
-- **Dictionary design** affects model vocabulary và performance
+- **Kiến trúc dual-head** rất quan trọng cho nhận diện bảng
+- **Đặc trưng đa tỷ lệ** quan trọng cho hiểu không gian
+- **Attention mechanism** giúp mô hình hóa quan hệ cấu trúc bảng
+- **Hậu xử lý** quyết định output có ý nghĩa
+- **Thiết kế dictionary** ảnh hưởng đến từ vựng và hiệu năng mô hình

@@ -42,38 +42,39 @@ TableMaster là một end-to-end model cho table structure recognition, sử d�
 
 ## Kiến trúc tổng thể
 
-Model TableMaster bao gồm các thành phần chính:
 
-1. **Feature Extraction:** TableResNetExtra backbone với Global Context Blocks
-2. **Sequence Encoding:** PositionalEncoding để thêm spatial information
-3. **Dual-Head Decoding:** TableMasterConcatDecoder cho token và bbox prediction
-4. **Token Management:** TableMasterDictionary cho structure token mapping
-5. **Output Processing:** TableMasterPostprocessor để convert raw predictions
+Model TableMaster gồm các thành phần chính:
 
-## Training và Inference
+1. **Trích xuất đặc trưng:** Backbone TableResNetExtra với Global Context Blocks
+2. **Mã hóa chuỗi:** PositionalEncoding để thêm thông tin vị trí không gian
+3. **Giải mã hai đầu:** TableMasterConcatDecoder cho dự đoán token và bbox
+4. **Quản lý token:** TableMasterDictionary cho ánh xạ token cấu trúc
+5. **Xử lý đầu ra:** TableMasterPostprocessor để chuyển đổi dự đoán thô
 
-### Training Process
-- Multi-task learning với classification và regression objectives
-- MasterTFLoss cho token prediction
-- TableL1Loss cho bbox regression
-- Gradient balancing giữa hai heads
+## Huấn luyện và Suy luận
 
-### Inference Process
+### Quy trình huấn luyện
+- Học đa nhiệm với mục tiêu phân loại và hồi quy
+- MasterTFLoss cho dự đoán token
+- TableL1Loss cho hồi quy bbox
+- Cân bằng gradient giữa hai đầu
+
+### Quy trình suy luận
 - Forward pass qua toàn bộ pipeline
-- Postprocessing để tạo meaningful outputs
-- Confidence thresholding và coordinate denormalization
+- Hậu xử lý để tạo output có ý nghĩa
+- Ngưỡng độ tin cậy và khử chuẩn hóa tọa độ
 
-## Evaluation
+## Đánh giá
 
-Model được evaluate bằng:
-- TEDS (Tree Edit Distance based Similarity) metric
-- Token accuracy và bbox IoU
-- Structure consistency checking
+Model được đánh giá bằng:
+- Chỉ số TEDS (Tree Edit Distance based Similarity)
+- Độ chính xác token và bbox IoU
+- Kiểm tra tính nhất quán cấu trúc
 
 ## Lưu ý quan trọng
 
-- **Dual-head design** essential cho table recognition task
-- **Multi-scale features** important cho spatial understanding
-- **Attention mechanism** captures table structure relationships
-- **Dictionary design** affects model vocabulary và performance
-- **Postprocessing** critical cho practical applications
+- **Thiết kế hai đầu** rất quan trọng cho bài toán nhận diện bảng
+- **Đặc trưng đa tỷ lệ** quan trọng cho hiểu không gian
+- **Attention mechanism** giúp mô hình hóa quan hệ cấu trúc bảng
+- **Thiết kế dictionary** ảnh hưởng đến từ vựng và hiệu năng mô hình
+- **Hậu xử lý** quyết định ứng dụng thực tế
