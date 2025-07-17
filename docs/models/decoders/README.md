@@ -1,38 +1,103 @@
 # Decoders
 
-#### 3. TableMasterConcatDecoder (Decoder)
-**Chức năng:** Dự đoán chuỗi token cấu trúc bảng và vị trí các bounding box cho từng ô.
-**Kiến trúc chi tiết:**
-- **Embedding Layer:** Nhận chuỗi target token (tgt_seq), chuyển thành embedding vector.
-- **Positional Encoding:** Bổ sung thông tin vị trí cho embedding.
-- **Shared Decoder Layers:**
-    - Gồm N-1 layer (mặc định 2 nếu n_layers=3), mỗi layer gồm các block:
-        - Self-Attention: Tương tác giữa các token trong chuỗi.
-        - Source-Attention: Tương tác giữa token và feature map từ encoder.
-        - Feed-Forward: Biến đổi phi tuyến.
-    - Output: tensor x (shape [N, T, d_model])
-- **Phân nhánh cuối:**
-    - **Classification Branch:**
-        - 1 layer decoder riêng cho classification (cls_layer).
-        - Có thể dùng nhiều layer, kết quả các layer sẽ được concat lại (ở bản concat).
-        - Sau khi concat, áp dụng LayerNorm và Linear để ra `token_logits` (shape [N, T, num_classes]).
-    - **BBox Branch:**
-        - 1 layer decoder riêng cho bbox (bbox_layer).
-        - Tương tự, concat các layer, LayerNorm, Linear + Sigmoid để ra `bbox_logits` (shape [N, T, 4]).
-- **Loss Head:**
-    - `tokens_loss`: MasterTFLoss (CrossEntropy, ignore_index, flatten...)
-    - `bboxes_loss`: TableL1Loss (L1, mask, lambda_horizon, lambda_vertical...)
-- **Các phương thức chính:**
-    - `decode`: Xử lý forward qua các layer, phân nhánh, concat, heads.
-    - `forward_train`, `forward_test`: Xây dựng input, mask, gọi decode.
-    - `predict`: Dự đoán và hậu xử lý.
-    - `loss`: Tính toán loss từ output và ground truth.
+## 3. TableMasterConcatDecoder
+
+**Chức năng:** Decoder module chính của TableMaster với dual-head architecture cho table structure recognition và bbox regression. Sử dụng concatenation strategy để combine multiple layer outputs.
+
+**Đặc điểm:**
+- Dual-head architecture: classification và bbox regression
+- Concatenation strategy cho better feature fusion
+- Transformer-based decoder với attention mechanism
+- Tích hợp postprocessor cho output processing
+- Hỗ trợ multiple loss functions
 
 **Input:**
-- `encoded_features` (torch.Tensor): Đặc trưng đã mã hóa vị trí.
-- `tgt_seq` (torch.Tensor): Chuỗi token target (huấn luyện).
-- `data_samples` (List[TableMasterDataSample]): Ground truth, meta info.
+- `feat`: Encoded features từ encoder (torch.Tensor, shape: [N, H*W, C])
+- `out_enc`: Encoded features (optional)
+- `data_samples`: Batch data samples với ground truth
+
 **Output:**
-- `token_logits` (torch.Tensor): Dự đoán nhãn cho từng token.
-- `bbox_logits` (torch.Tensor): Dự đoán vị trí bounding box cho từng ô.
-- `loss` (dict): Giá trị mất mát cho token, bbox.
+- `token_logits`: Classification logits cho structure tokens (torch.Tensor)
+- `bbox_logits`: Bbox regression outputs (torch.Tensor)
+
+**Tham số cấu hình:**
+- `n_layers`: Số layers trong decoder. Mặc định 3
+- `n_head`: Số attention heads. Mặc định 8
+- `d_model`: Model dimension. Mặc định 512
+- `max_seq_len`: Maximum sequence length. Mặc định 600
+- `dictionary`: Dictionary config cho token mapping
+- `decoder`: Decoder layer configuration
+- `postprocessor`: Postprocessor configuration
+- `tokens_loss`: Loss function cho classification head
+- `bboxes_loss`: Loss function cho bbox regression head
+
+**Kiến trúc chi tiết:**
+
+1. **Embedding Layer:**
+   - Token embedding cho input sequences
+   - Positional encoding integration
+
+2. **Shared Decoder Layers:**
+   - Multiple transformer decoder layers
+   - Self-attention và cross-attention mechanisms
+
+3. **Dual Heads:**
+   - **Classification Head:** Predict structure tokens
+   - **Bbox Head:** Predict bounding box coordinates
+
+4. **Concatenation Strategy:**
+   - Concatenate outputs từ multiple layers
+   - Improved feature representation
+
+**Ví dụ cấu hình:**
+```python
+decoder = dict(
+    type='TableMasterConcatDecoder',
+    n_layers=3,
+    n_head=8,
+    d_model=512,
+    max_seq_len=600,
+    dictionary=dictionary,
+    decoder=dict(
+        self_attn=dict(headers=8, d_model=512, dropout=0.0),
+        src_attn=dict(headers=8, d_model=512, dropout=0.0),
+        feed_forward=dict(d_model=512, d_ff=2024, dropout=0.0),
+        size=512,
+        dropout=0.0
+    ),
+    postprocessor=dict(
+        type='TableMasterPostprocessor',
+        dictionary=dictionary,
+        max_seq_len=600,
+        start_end_same=False
+    ),
+    tokens_loss=dict(
+        type='MasterTFLoss',
+        ignore_index=PAD,
+        reduction='mean',
+        flatten=True
+    ),
+    bboxes_loss=dict(
+        type='TableL1Loss',
+        reduction='sum',
+        lambda_horizon=1.0,
+        lambda_vertical=1.0,
+        eps=1e-9
+    )
+)
+```
+
+**Loss Functions:**
+- **tokens_loss:** Cross-entropy loss cho classification
+- **bboxes_loss:** L1 loss cho bbox regression
+
+**Quan hệ với pipeline:**
+- Nhận features từ @import "../encoders/README.md"
+- Sử dụng @import "../postprocessors/README.md" cho output processing
+- Sử dụng @import "../dictionaries/README.md" cho token mapping
+
+**Lưu ý đặc biệt:**
+- Dual-head design essential cho table structure + bbox prediction
+- Concatenation strategy improves feature utilization
+- Attention mechanism captures spatial relationships
+- Postprocessor crucial cho meaningful outputs

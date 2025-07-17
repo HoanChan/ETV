@@ -1,41 +1,37 @@
 # Table Dataset
 
-### 1.1 Dataset
+## 1.1 PubTabNetDataset
 
-**Loại:** `PubTabNetDataset`
+**Chức năng:** Dataset chính cho nhận diện cấu trúc và nội dung bảng từ PubTabNet dataset. Tuân thủ chuẩn MMEngine Dataset và format 'instances' của mmOCR 1.x.
 
-**Chức năng:**
-  - Dataset cho nhận diện cấu trúc và nội dung bảng, tuân thủ chuẩn mmOCR 1.x.
-  - Mỗi sample trả về dict với key 'instances' chứa thông tin cho từng nhiệm vụ (structure/content).
+**Đặc điểm:**
+- Load dữ liệu từ file annotation (.jsonl hoặc .bz2)
+- Parse dữ liệu thành format chuẩn cho table recognition
+- Hỗ trợ filter theo split (train/val/test)
+- Hỗ trợ giới hạn số lượng dữ liệu và random sampling
+- Xử lý cả structure tokens và cell content tokens
 
-**Định dạng annotation:**
-```json
+**Input:**
+- `ann_file`: Đường dẫn file annotation (hỗ trợ .jsonl và .bz2)
+- `data_prefix`: Dictionary chứa đường dẫn root của images
+- Các tham số cấu hình (split_filter, max_structure_len, etc.)
+
+**Output:** Mỗi sample trả về dictionary với cấu trúc:
+```python
 {
-    "filename": str,
-    "split": str,  // "train", "val", hoặc "test"
-    "imgid": int,
-    "html": {
-        "structure": {"tokens": [str]},
-        "cells": [
-            {
-                "tokens": [str],
-                "bbox": [x0, y0, x1, y1] // chỉ có với ô không rỗng
-            }
-        ]
-    }
-}
-```
-
-**Định dạng output:**
-```json
-{
-    "img_path": str,  // đường dẫn ảnh
-    "sample_idx": int,  // chỉ số mẫu
-    "instances": [
+    "img_path": str,          # Đường dẫn file ảnh
+    "sample_idx": int,        # Index của sample
+    "instances": [            # Danh sách instances
         {
-            "tokens": [str],
-            "type": "structure" | "content",
-            "cell_id": int,           // chỉ với content
-            "bbox": [x0, y0, x1, y1]  // chỉ với content
+            "tokens": [str],        # Danh sách tokens
+            "type": str,           # 'structure' hoặc 'content'
+            "cell_id": int,        # ID của cell (chỉ cho 'content')
+            "bbox": [int, int, int, int]  # Bounding box (chỉ cho 'content')
         }
     ],
+    "img_info": {             # Thông tin về ảnh
+        "height": int,        # Chiều cao ảnh
+        "width": int,         # Chiều rộng ảnh
+        "split": str          # Split của dữ liệu
+    }
+}
