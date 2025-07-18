@@ -261,11 +261,11 @@ class TableMasterInferencer(BaseMMOCRInferencer):
             # Extract structure tokens prediction
             if hasattr(pred, 'pred_tokens') and pred.pred_tokens is not None:
                 if hasattr(pred.pred_tokens, 'item'):
-                    result_dict['structure'] = pred.pred_tokens.item
+                    result_dict['tokens'] = pred.pred_tokens.item
                 else:
-                    result_dict['structure'] = pred.pred_tokens
+                    result_dict['tokens'] = pred.pred_tokens
             elif hasattr(pred, 'pred_text') and pred.pred_text is not None:
-                result_dict['structure'] = pred.pred_text.item
+                result_dict['tokens'] = pred.pred_text.item
                 
             # Extract bboxes if available
             if hasattr(pred, 'pred_instances') and pred.pred_instances is not None:
@@ -317,8 +317,8 @@ class TableMasterInferencer(BaseMMOCRInferencer):
         if print_result:
             for i, result in enumerate(results):
                 print(f"Result {i+1}:")
-                if 'structure' in result:
-                    print(f"  Structure: {result['structure']}")
+                if 'tokens' in result:
+                    print(f"  tokens: {result['tokens']}")
                 if 'token_score' in result:
                     print(f"  Token Score: {result['token_score']}")
                 if 'bboxes' in result:
