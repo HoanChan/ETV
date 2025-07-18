@@ -1,10 +1,32 @@
-VITABSET_TRAIN_IMAGE_ROOT = "F:/data/vitabset/train"
-VITABSET_TRAIN_JSON = "F:/data/vitabset/train.bz2"
-VITABSET_VAL_IMAGE_ROOT = "F:/data/vitabset/val"
-VITABSET_VAL_JSON = "F:/data/vitabset/val.bz2"
-VITABSET_TEST_IMAGE_ROOT = "F:/data/vitabset/test"
-VITABSET_TEST_JSON = "F:/data/vitabset/test.bz2"
-STRUCTURE_VOCAB_FILE = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
+try:
+    sysmod = __import__('sys')
+    osmod = __import__('os')
+    if 'google.colab' in sysmod.modules:
+        ENV = 'colab'
+    elif osmod.name == 'nt':
+        ENV = 'windows'
+    else:
+        ENV = 'linux'
+except:
+    ENV = 'unknown'
+
+if ENV == 'windows':
+    prefix = "F:/data/vitabset"
+    vocab_path = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
+elif ENV == 'linux':
+    prefix = "/mnt/data/vitabset"
+    vocab_path = "/home/user/ETV/src/data/structure_vocab.txt"
+else:  # colab
+    prefix = "/content/data/vitabset"
+    vocab_path = "/content/ETV/src/data/structure_vocab.txt"
+
+VITABSET_TRAIN_IMAGE_ROOT = f"{prefix}/train"
+VITABSET_TRAIN_JSON = f"{prefix}/train.bz2"
+VITABSET_VAL_IMAGE_ROOT = f"{prefix}/val"
+VITABSET_VAL_JSON = f"{prefix}/val.bz2"
+VITABSET_TEST_IMAGE_ROOT = f"{prefix}/test"
+VITABSET_TEST_JSON = f"{prefix}/test.bz2"
+STRUCTURE_VOCAB_FILE = vocab_path
 # region Dictionary
 start_end_same = False
 alphabet_len = len(open(STRUCTURE_VOCAB_FILE, 'r').readlines())
@@ -180,7 +202,7 @@ model = dict(
         ),
     ),
     data_preprocessor=dict(
-        type='TextRecogDataPreprocessor',
+        type='mmocr.TextRecogDataPreprocessor',
         mean=[127.5, 127.5, 127.5],
         std=[127.5, 127.5, 127.5]))
 # endregion
@@ -191,8 +213,6 @@ custom_imports = dict(
         'datasets.table_dataset',
         'datasets.transforms.load_tokens',
         'datasets.transforms.pack_inputs',
-        'datasets.transforms.table_pad',
-        'datasets.transforms.table_resize',
         'datasets.transforms.bbox_encode',
         'datasets.transforms.pad_data',
         'models.backbones.resnet_extra',
@@ -206,6 +226,8 @@ custom_imports = dict(
         'models.postprocessors.table_master_postprocessor',
         'models.recognizer.table_master',
         'optimizer.ranger',
+        'structures.table_master_data_sample',
+        'visualization.table_master_visualizer',
     ],
     allow_failed_imports=False,
 )
