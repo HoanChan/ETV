@@ -17,7 +17,7 @@ if ENV == 'windows':
 #     prefix = "/mnt/data/vitabset"
 #     vocab_path = "/home/user/ETV/src/data/structure_vocab.txt"
 else:  # colab
-    prefix = "/content/data/vitabset"
+    prefix = "/content/vitabset"
     vocab_path = "/content/ETV/src/data/structure_vocab.txt"
 
 VITABSET_TRAIN_IMAGE_ROOT = f"{prefix}/train"
