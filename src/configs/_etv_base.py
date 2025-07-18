@@ -13,9 +13,9 @@ except:
 if ENV == 'windows':
     prefix = "F:/data/vitabset"
     vocab_path = "d:/BIG Projects/Python/ETV/src/data/structure_vocab.txt"
-elif ENV == 'linux':
-    prefix = "/mnt/data/vitabset"
-    vocab_path = "/home/user/ETV/src/data/structure_vocab.txt"
+# elif ENV == 'linux':
+#     prefix = "/mnt/data/vitabset"
+#     vocab_path = "/home/user/ETV/src/data/structure_vocab.txt"
 else:  # colab
     prefix = "/content/data/vitabset"
     vocab_path = "/content/ETV/src/data/structure_vocab.txt"
