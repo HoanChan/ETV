@@ -1,6 +1,5 @@
 # Copyright (c) Lê Hoàn Chân. All rights reserved.
 from typing import Optional
-import numpy as np
 from mmcv.transforms import BaseTransform
 from mmocr.registry import TRANSFORMS
 from datasets.transforms.transforms_utils import align_bbox_mask, build_bbox_mask, build_empty_bbox_mask, get_bbox_nums, remove_thead_Bb, process_token

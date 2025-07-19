@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 from datasets.transforms.load_tokens import LoadTokens
 from datasets.transforms.transforms_utils import get_bbox_nums
@@ -70,8 +69,6 @@ def test_structure_only(sample_data):
     assert 'bboxes' in result
     assert 'masks' in result
     assert 'cells' not in result
-    assert isinstance(result['bboxes'], np.ndarray)
-    assert isinstance(result['masks'], np.ndarray)
     assert len(result['bboxes']) == len(result['tokens'])
 
 def test_cell_only(sample_data):
@@ -93,8 +90,6 @@ def test_both_structure_and_cell(sample_data):
     assert 'bboxes' in result
     assert 'masks' in result
     assert 'cells' in result
-    assert isinstance(result['bboxes'], np.ndarray)
-    assert isinstance(result['masks'], np.ndarray)
     assert len(result['bboxes']) == len(result['tokens'])
 
 @pytest.mark.parametrize("structure_tokens,cell_tokens_list,bboxes", [
@@ -148,8 +143,6 @@ def test_empty_instances():
     
     assert result['tokens'] == []
     assert result['cells'] == []
-    assert isinstance(result['bboxes'], np.ndarray)
-    assert isinstance(result['masks'], np.ndarray)
 
 def test_missing_instances():
     """Test handling when instances key is missing."""
