@@ -4,7 +4,7 @@
 _base_ = [ # https://mmengine.readthedocs.io/en/latest/advanced_tutorials/config.html#inherit-configuration-files-across-repository
     'mmocr::textrecog/_base_/default_runtime.py',               # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/default_runtime.py
     'mmocr::textrecog/_base_/schedules/schedule_adam_base.py',  # https://github.com/open-mmlab/mmocr/blob/v1.0.1/configs/textrecog/_base_/schedules/schedule_adam_base.py                         
-    '_etv_base.py' # file:///./_etv_base.py
+    '_table_master_base.py' # file:///./_table_master_base.py
 ]
 
 # Optimizer
