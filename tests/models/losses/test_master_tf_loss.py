@@ -3,7 +3,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from models.losses.master_tf_loss import MASTERTFLoss
+from models.losses.master_tf_loss import MasterTFLoss
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_forward_with_different_parameters(sample_data, ignore_index, reduction,
     """Test forward method with different parameter combinations."""
     outputs, targets_dict = sample_data
     
-    loss_fn = MASTERTFLoss(
+    loss_fn = MasterTFLoss(
         ignore_index=ignore_index,
         reduction=reduction,
         flatten=flatten
@@ -88,7 +88,7 @@ def test_format_inputs_shapes(sample_data, flatten):
     outputs, targets_dict = sample_data
     batch_size, seq_length, num_classes = outputs.shape
     
-    loss_fn = MASTERTFLoss(flatten=flatten)
+    loss_fn = MasterTFLoss(flatten=flatten)
     formatted_outputs, formatted_targets = loss_fn._format_inputs(outputs, targets_dict)
     
     if flatten:
@@ -106,7 +106,7 @@ def test_target_sequence_shifting(sample_data):
     outputs, targets_dict = sample_data
     original_targets = targets_dict['padded_targets']
     
-    loss_fn = MASTERTFLoss(flatten=True)
+    loss_fn = MasterTFLoss(flatten=True)
     _, formatted_targets = loss_fn._format_inputs(outputs, targets_dict)
     
     # Check that we're using targets[1:] (removing start token)
@@ -118,7 +118,7 @@ def test_different_input_sizes(variable_sample_data):
     """Test with different input tensor sizes using parametrized fixture."""
     outputs, targets_dict = variable_sample_data
     
-    loss_fn = MASTERTFLoss()
+    loss_fn = MasterTFLoss()
     loss = loss_fn(outputs, targets_dict)
     
     assert isinstance(loss, torch.Tensor)
@@ -137,7 +137,7 @@ def test_ignore_index_functionality(sample_data, ignore_value):
     # Set some target values to ignore_value
     targets_dict['padded_targets'][:, 1:3] = ignore_value
     
-    loss_fn = MASTERTFLoss(ignore_index=ignore_value, reduction='none', flatten=True)
+    loss_fn = MasterTFLoss(ignore_index=ignore_value, reduction='none', flatten=True)
     loss = loss_fn(outputs, targets_dict)
     
     # Loss should be computed (some values might be 0 due to ignore_index)
@@ -146,8 +146,8 @@ def test_ignore_index_functionality(sample_data, ignore_value):
 
 
 def test_inheritance_from_crossentropyloss():
-    """Test that MASTERTFLoss properly inherits from CrossEntropyLoss."""
-    loss_fn = MASTERTFLoss()
+    """Test that MasterTFLoss properly inherits from CrossEntropyLoss."""
+    loss_fn = MasterTFLoss()
     assert isinstance(loss_fn, nn.CrossEntropyLoss)
     assert hasattr(loss_fn, 'ignore_index')
     assert hasattr(loss_fn, 'reduction')
@@ -163,7 +163,7 @@ def test_missing_padded_targets_key(wrong_key):
     outputs = torch.randn(2, 10, 5)
     targets_dict = {wrong_key: torch.randint(0, 5, (2, 11))}
     
-    loss_fn = MASTERTFLoss()
+    loss_fn = MasterTFLoss()
     
     with pytest.raises(KeyError):
         loss_fn(outputs, targets_dict)
@@ -178,7 +178,7 @@ def test_reduction_modes(sample_data, reduction):
     """Test different reduction modes."""
     outputs, targets_dict = sample_data
     
-    loss_fn = MASTERTFLoss(reduction=reduction)
+    loss_fn = MasterTFLoss(reduction=reduction)
     loss = loss_fn(outputs, targets_dict)
     
     if reduction == 'none':
@@ -194,7 +194,7 @@ def test_gradient_flow(sample_data):
     outputs, targets_dict = sample_data
     outputs.requires_grad_(True)
     
-    loss_fn = MASTERTFLoss(reduction='mean')
+    loss_fn = MasterTFLoss(reduction='mean')
     loss = loss_fn(outputs, targets_dict)
     
     # Backward pass
@@ -209,7 +209,7 @@ def test_deterministic_behavior(sample_data):
     """Test that the loss function produces deterministic results."""
     outputs, targets_dict = sample_data
     
-    loss_fn = MASTERTFLoss(reduction='mean')
+    loss_fn = MasterTFLoss(reduction='mean')
     
     # Compute loss twice with same inputs
     loss1 = loss_fn(outputs, targets_dict)
@@ -232,7 +232,7 @@ def test_different_dtypes(dtype):
     targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
     targets_dict = {'padded_targets': targets}
     
-    loss_fn = MASTERTFLoss()
+    loss_fn = MasterTFLoss()
     loss = loss_fn(outputs, targets_dict)
     
     # Loss should have same dtype as outputs
@@ -253,7 +253,7 @@ def test_configuration_combinations(sample_data, config):
     """Test various configuration combinations efficiently."""
     outputs, targets_dict = sample_data
     
-    loss_fn = MASTERTFLoss(**config)
+    loss_fn = MasterTFLoss(**config)
     loss = loss_fn(outputs, targets_dict)
     
     assert isinstance(loss, torch.Tensor)
@@ -281,7 +281,7 @@ def test_loss_computation_efficiency(batch_size, seq_length, num_classes, expect
     targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
     targets_dict = {'padded_targets': targets}
     
-    loss_fn = MASTERTFLoss(reduction='none', flatten=True)
+    loss_fn = MasterTFLoss(reduction='none', flatten=True)
     loss = loss_fn(outputs, targets_dict)
     
     # Check that we get loss for expected number of elements

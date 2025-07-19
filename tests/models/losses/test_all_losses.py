@@ -11,13 +11,13 @@ import torch
 import torch.nn as nn
 import inspect
 
-from models.losses.master_tf_loss import MASTERTFLoss
+from models.losses.master_tf_loss import MasterTFLoss
 from models.losses.table_l1_loss import TableL1Loss
 
 
 def _create_loss_instance(loss_class):
     """Create a loss instance with default parameters."""
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         return loss_class()
     elif loss_class == TableL1Loss:
         return loss_class()
@@ -26,7 +26,7 @@ def _create_loss_instance(loss_class):
 
 
 # Define all loss classes in one place for consistency
-ALL_LOSS_CLASSES = [MASTERTFLoss, TableL1Loss]
+ALL_LOSS_CLASSES = [MasterTFLoss, TableL1Loss]
 
 
 @pytest.fixture
@@ -61,12 +61,12 @@ def test_loss_forward_signature(loss_class):
 
 
 @pytest.mark.parametrize("loss_class,config", [
-    (MASTERTFLoss, {'flatten': True, 'reduction': 'mean'}),
-    (MASTERTFLoss, {'flatten': False, 'reduction': 'sum'}),
-    (MASTERTFLoss, {'flatten': True, 'reduction': 'none', 'ignore_index': 0}),
+    (MasterTFLoss, {'flatten': True, 'reduction': 'mean'}),
+    (MasterTFLoss, {'flatten': False, 'reduction': 'sum'}),
+    (MasterTFLoss, {'flatten': True, 'reduction': 'none', 'ignore_index': 0}),
 ])
 def test_master_tf_loss_configurations(loss_class, config):
-    """Test MASTERTFLoss with different configurations."""
+    """Test MasterTFLoss with different configurations."""
     batch_size, seq_length, num_classes = 2, 10, 5
     
     outputs = torch.randn(batch_size, seq_length, num_classes)
@@ -117,7 +117,7 @@ def test_table_l1_loss_configurations(config):
 )
 def test_all_losses_scale_with_batch_size(loss_class, batch_size, seq_length):
     """Test that all losses handle different batch sizes correctly."""
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         num_classes = 5
         outputs = torch.randn(batch_size, seq_length, num_classes)
         targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
@@ -144,7 +144,7 @@ def test_losses_numerical_stability(loss_class):
     """Test numerical stability of all losses."""
     batch_size, seq_length = 2, 5
     
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         # Test with extreme logits
         num_classes = 3
         extreme_outputs = torch.tensor([[[1e6, -1e6, 0]], [[0, 1e6, -1e6]]], dtype=torch.float32)
@@ -175,7 +175,7 @@ def test_losses_gradient_computation(loss_class):
     """Test that all losses support gradient computation."""
     batch_size, seq_length = 2, 5
     
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         num_classes = 5
         outputs = torch.randn(batch_size, seq_length, num_classes, requires_grad=True)
         targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
@@ -212,7 +212,7 @@ def test_losses_device_compatibility(loss_class, device):
     
     batch_size, seq_length = 2, 5
     
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         num_classes = 5
         outputs = torch.randn(batch_size, seq_length, num_classes).to(device)
         targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
@@ -235,9 +235,9 @@ def test_losses_device_compatibility(loss_class, device):
 
 
 @pytest.mark.parametrize("loss_class,reduction", [
-    (MASTERTFLoss, 'mean'),
-    (MASTERTFLoss, 'sum'),
-    (MASTERTFLoss, 'none'),
+    (MasterTFLoss, 'mean'),
+    (MasterTFLoss, 'sum'),
+    (MasterTFLoss, 'none'),
 ])
 def test_loss_reduction_modes(loss_class, reduction):
     """Test different reduction modes for losses that support it."""
@@ -258,8 +258,8 @@ def test_loss_reduction_modes(loss_class, reduction):
 
 
 @pytest.mark.parametrize("loss_class,dtype", [
-    (MASTERTFLoss, torch.float32),
-    (MASTERTFLoss, torch.float64),
+    (MasterTFLoss, torch.float32),
+    (MasterTFLoss, torch.float64),
     (TableL1Loss, torch.float32),
     (TableL1Loss, torch.float64),
 ])
@@ -267,7 +267,7 @@ def test_loss_dtype_compatibility(loss_class, dtype):
     """Test that losses work with different data types."""
     batch_size, seq_length = 2, 5
     
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         num_classes = 3
         outputs = torch.randn(batch_size, seq_length, num_classes, dtype=dtype)
         targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))
@@ -291,7 +291,7 @@ def test_loss_dtype_compatibility(loss_class, dtype):
 
 @pytest.mark.parametrize("ignore_index", [0, 1, -1, -100])
 def test_master_tf_loss_ignore_index(ignore_index):
-    """Test MASTERTFLoss with different ignore_index values."""
+    """Test MasterTFLoss with different ignore_index values."""
     batch_size, seq_length, num_classes = 2, 5, 3
     
     outputs = torch.randn(batch_size, seq_length, num_classes)
@@ -301,7 +301,7 @@ def test_master_tf_loss_ignore_index(ignore_index):
     targets[:, 0] = ignore_index
     targets_dict = {'padded_targets': targets}
     
-    loss_fn = MASTERTFLoss(ignore_index=ignore_index, reduction='mean')
+    loss_fn = MasterTFLoss(ignore_index=ignore_index, reduction='mean')
     result = loss_fn(outputs, targets_dict)
     assert torch.isfinite(result)
 
@@ -341,7 +341,7 @@ def test_loss_gradient_requirements(loss_class, requires_grad):
     """Test losses with and without gradient requirements."""
     batch_size, seq_length = 2, 3
     
-    if loss_class == MASTERTFLoss:
+    if loss_class == MasterTFLoss:
         num_classes = 3
         outputs = torch.randn(batch_size, seq_length, num_classes, requires_grad=requires_grad)
         targets = torch.randint(0, num_classes, (batch_size, seq_length + 1))

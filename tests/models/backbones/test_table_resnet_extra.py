@@ -2,7 +2,8 @@ import pytest
 import torch
 import torch.nn as nn
 from unittest.mock import patch
-from models.backbones.table_resnet_extra import TableResNetExtra, conv3x3, conv1x1, get_gcb_config
+from models.backbones.table_resnet_extra import TableResNetExtra
+from models.backbones.resnet_extra import conv3x3, conv1x1, get_gcb_config
 
 
 class TestTableResNetExtra:
@@ -76,8 +77,8 @@ class TestTableResNetExtra:
             'fusion_type': 'channel_add'
         }
         
-        # Mock ContextBlock to avoid import issues
-        with patch('models.backbones.table_resnet_extra.ContextBlock') as mock_cb:
+        # Mock ContextBlock from the correct module where it's imported
+        with patch('models.backbones.resnet_extra.ContextBlock') as mock_cb:
             mock_cb.return_value = nn.Identity()
             model = TableResNetExtra(layers=layers, gcb_config=gcb_config)
             
@@ -155,7 +156,7 @@ class TestTableResNetExtra:
         # BN weights should be initialized to 1
         assert torch.allclose(model.bn1.weight, torch.ones_like(model.bn1.weight))
 
-    @patch('models.backbones.table_resnet_extra.ContextBlock')
+    @patch('models.backbones.resnet_extra.ContextBlock')
     def test_make_layer_with_gcb_failure(self, mock_cb):
         """Test _make_layer when ContextBlock creation fails"""
         mock_cb.side_effect = Exception("ContextBlock failed")
