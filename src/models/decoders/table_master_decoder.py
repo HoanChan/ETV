@@ -113,18 +113,23 @@ class TableMasterDecoder(BaseDecoder):
             device (torch.device): Mask device.
 
         Returns:
-            Tensor: Mask of shape [N, l_tgt, l_tgt]
+            Tensor: Mask of shape [N, l_tgt, l_tgt] or [N, 1, l_tgt, l_tgt] for multi-head attention
         """
-        # Create padding mask
-        trg_pad_mask = (tgt != self.PAD).unsqueeze(1).unsqueeze(3).bool()
+        batch_size, tgt_len = tgt.size()
         
-        # Create subsequent mask (triangular mask)
-        tgt_len = tgt.size(1)
+        # Create padding mask: [N, l_tgt, l_tgt]
+        # Padding positions should be masked (False)
+        trg_pad_mask = (tgt != self.PAD).unsqueeze(1).expand(batch_size, tgt_len, tgt_len)
+        
+        # Create subsequent mask (triangular mask): [l_tgt, l_tgt]
         trg_sub_mask = torch.tril(
             torch.ones((tgt_len, tgt_len), dtype=torch.bool, device=device))
         
-        # Combine masks
-        tgt_mask = trg_pad_mask & trg_sub_mask
+        # Combine masks: both conditions must be True for the position to be unmasked
+        tgt_mask = trg_pad_mask & trg_sub_mask.unsqueeze(0)
+        
+        # Add head dimension for multi-head attention: [N, 1, l_tgt, l_tgt]
+        tgt_mask = tgt_mask.unsqueeze(1)
         
         return tgt_mask
 
@@ -136,13 +141,19 @@ class TableMasterDecoder(BaseDecoder):
         Args:
             tgt_seq (Tensor): Target sequence of shape: (N, T, C).
             feature (Tensor): Input feature map from encoder of
-                shape: (N, C, H, W)
+                shape: (N, C, H, W) or (N, H*W, C)
             src_mask (BoolTensor): The source mask of shape: (N, H*W).
             tgt_mask (BoolTensor): The target mask of shape: (N, T, T).
 
         Returns:
             Tuple[Tensor, Tensor]: The decoded classification and bbox outputs.
         """
+        # Handle 4D feature maps by reshaping them
+        if len(feature.shape) == 4:
+            b, c, h, w = feature.shape
+            feature = feature.view(b, c, h*w)  # flatten 2D feature map
+            feature = feature.permute((0, 2, 1))  # (b, h*w, c)
+        
         # Main process of transformer decoder
         x = self.embedding(tgt_seq)
         x = self.positional_encoding(x)
