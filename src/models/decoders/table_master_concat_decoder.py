@@ -17,15 +17,15 @@ class TableMasterConcatDecoder(TableMasterDecoder):
         super().__init__(d_model=d_model, **kwargs)
 
         # Override classification and bbox heads for concatenation
-        # For concat version, we concatenate one layer output (so concat_dim = d_model * 1 = d_model)
-        # If you have multiple layers to concatenate, adjust accordingly
-        concat_dim = d_model
+        # Calculate concat dimensions based on actual number of layers
+        cls_concat_dim = d_model * len(self.cls_layer)
+        bbox_concat_dim = d_model * len(self.bbox_layer)
         
         # Classification head (adjusted for concatenation)
-        self.cls_fc = nn.Linear(concat_dim, self.dictionary.num_classes)
+        self.cls_fc = nn.Linear(cls_concat_dim, self.dictionary.num_classes)
         
         # Bbox regression head (adjusted for concatenation)
-        self.bbox_fc = nn.Sequential(nn.Linear(concat_dim, 4), nn.Sigmoid())
+        self.bbox_fc = nn.Sequential(nn.Linear(bbox_concat_dim, 4), nn.Sigmoid())
 
     def decode(self, tgt_seq: torch.Tensor, feature: torch.Tensor,
                src_mask: torch.BoolTensor,
