@@ -12,10 +12,8 @@ def sample_data():
     img = np.random.randint(0, 255, (400, 300, 3), dtype=np.uint8)
     return {
         'img': img,
-        'img_info': {
-            'bbox': np.array([[30, 40, 90, 80], [150, 100, 250, 200]], dtype=np.float32),
-            'bbox_masks': np.ones((2,), dtype=bool)
-        },
+        'img_shape': (400, 300, 3),
+        'bboxes': np.array([[30, 40, 90, 80], [150, 100, 250, 200]], dtype=np.float32),
         'filename': 'test_image.jpg'
     }
 
@@ -26,10 +24,8 @@ def edge_case_data():
     img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     return {
         'img': img,
-        'img_info': {
-            'bbox': np.array([[0, 0, 50, 50], [50, 50, 100, 100]], dtype=np.float32),
-            'bbox_masks': np.ones((2,), dtype=bool)
-        },
+        'img_shape': (100, 100, 3),
+        'bboxes': np.array([[0, 0, 50, 50], [50, 50, 100, 100]], dtype=np.float32),
         'filename': 'edge_case.jpg'
     }
 
@@ -40,10 +36,8 @@ def invalid_bbox_data():
     img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     return {
         'img': img,
-        'img_info': {
-            'bbox': np.array([[50, 50, 200, 200]], dtype=np.float32),  # Extends beyond image
-            'bbox_masks': np.ones((1,), dtype=bool)
-        },
+        'img_shape': (100, 100, 3),
+        'bboxes': np.array([[50, 50, 200, 200]], dtype=np.float32),  # Extends beyond image
         'filename': 'invalid.jpg'
     }
 
@@ -61,14 +55,11 @@ class TestBboxEncode:
         transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
-        # Check that bbox and bbox_masks are moved to top level
-        assert 'bbox' in result
-        assert 'bbox_masks' in result
-        assert 'bbox' not in result['img_info']
-        assert 'bbox_masks' not in result['img_info']
+        # Check that bboxes are available in result
+        assert 'bboxes' in result
         
         # Check bbox format conversion (xyxy -> xywh)
-        bbox = result['bbox']
+        bbox = result['bboxes']
         assert bbox.shape == (2, 4)
         
         # Original: [[30, 40, 90, 80], [150, 100, 250, 200]]
@@ -95,10 +86,8 @@ class TestBboxEncode:
         img = np.random.randint(0, 255, img_shape, dtype=np.uint8)
         data = {
             'img': img,
-            'img_info': {
-                'bbox': np.array(bbox_xyxy, dtype=np.float32),
-                'bbox_masks': np.ones((len(bbox_xyxy),), dtype=bool)
-            },
+            'img_shape': img_shape,
+            'bboxes': np.array(bbox_xyxy, dtype=np.float32),
             'filename': 'test.jpg'
         }
         
@@ -106,7 +95,7 @@ class TestBboxEncode:
         result = transform.transform(data)
         
         expected = np.array(expected_xywh_norm, dtype=np.float32)
-        np.testing.assert_array_almost_equal(result['bbox'], expected, decimal=3)
+        np.testing.assert_array_almost_equal(result['bboxes'], expected, decimal=3)
 
     def test_bbox_validation_valid(self, sample_data):
         """Test bbox validation with valid bboxes."""
@@ -114,25 +103,25 @@ class TestBboxEncode:
         result = transform.transform(sample_data.copy())
         
         # All bboxes should be valid (between 0 and 1)
-        bbox = result['bbox']
+        bbox = result['bboxes']
         assert np.all(bbox >= 0)
         assert np.all(bbox <= 1)
 
     def test_bbox_validation_invalid(self, invalid_bbox_data, capsys):
         """Test bbox validation with invalid bboxes."""
         transform = BboxEncode()
-        result = transform.transform(invalid_bbox_data.copy())
         
-        # Should print warning about invalid bboxes
-        captured = capsys.readouterr()
-        assert 'Box invalid in invalid.jpg' in captured.out
+        # Should raise assertion error for invalid bboxes
+        with pytest.raises(AssertionError) as excinfo:
+            transform.transform(invalid_bbox_data.copy())
+        assert "Box invalid" in str(excinfo.value)
 
     def test_edge_case_bboxes(self, edge_case_data):
         """Test edge case bboxes (at image boundaries)."""
         transform = BboxEncode()
         result = transform.transform(edge_case_data.copy())
         
-        bbox = result['bbox']
+        bbox = result['bboxes']
         # Should handle edge cases properly
         assert np.all(bbox >= 0)
         assert np.all(bbox <= 1)
@@ -142,65 +131,52 @@ class TestBboxEncode:
         img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
         data = {
             'img': img,
-            'img_info': {
-                'bbox': np.array([], dtype=np.float32).reshape(0, 4),
-                'bbox_masks': np.array([], dtype=bool)
-            },
+            'img_shape': (100, 100, 3),
+            'bboxes': np.array([], dtype=np.float32).reshape(0, 4),
             'filename': 'empty.jpg'
         }
         
         transform = BboxEncode()
         result = transform.transform(data)
         
-        assert result['bbox'].shape == (0, 4)
-        assert result['bbox_masks'].shape == (0,)
+        assert result['bboxes'].shape == (0, 4)
 
     def test_single_bbox(self):
         """Test with single bbox."""
         img = np.random.randint(0, 255, (200, 200, 3), dtype=np.uint8)
         data = {
             'img': img,
-            'img_info': {
-                'bbox': np.array([[50, 50, 150, 150]], dtype=np.float32),
-                'bbox_masks': np.ones((1,), dtype=bool)
-            },
+            'img_shape': (200, 200, 3),
+            'bboxes': np.array([[50, 50, 150, 150]], dtype=np.float32),
             'filename': 'single.jpg'
         }
         
         transform = BboxEncode()
         result = transform.transform(data)
         
-        assert result['bbox'].shape == (1, 4)
+        assert result['bboxes'].shape == (1, 4)
         # Center should be at (100, 100) -> normalized (0.5, 0.5)
         # Size should be (100, 100) -> normalized (0.5, 0.5)
         expected = np.array([[0.5, 0.5, 0.5, 0.5]], dtype=np.float32)
-        np.testing.assert_array_almost_equal(result['bbox'], expected, decimal=3)
+        np.testing.assert_array_almost_equal(result['bboxes'], expected, decimal=3)
 
     def test_key_adjustment(self, sample_data):
         """Test that keys are properly adjusted in results dict."""
-        original_img_info_keys = set(sample_data['img_info'].keys())
         
         transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
-        # img_info should no longer have bbox and bbox_masks
-        assert 'bbox' not in result['img_info']
-        assert 'bbox_masks' not in result['img_info']
-        
-        # Top level should have bbox and bbox_masks
-        assert 'bbox' in result
-        assert 'bbox_masks' in result
+        # Top level should have bboxes
+        assert 'bboxes' in result
 
     def test_preserve_other_keys(self, sample_data):
         """Test that other keys are preserved."""
         sample_data['extra_key'] = 'extra_value'
-        sample_data['img_info']['extra_info'] = 'extra_info_value'
         
         transform = BboxEncode()
         result = transform.transform(sample_data.copy())
         
         assert result['extra_key'] == 'extra_value'
-        assert result['img_info']['extra_info'] == 'extra_info_value'
         assert result['filename'] == sample_data['filename']
 
     @pytest.mark.parametrize("bbox_values,should_be_valid", [
@@ -239,10 +215,8 @@ class TestBboxEncode:
         # Test with int32 bboxes
         data = {
             'img': img,
-            'img_info': {
-                'bbox': np.array([[10, 10, 50, 50]], dtype=np.int32),
-                'bbox_masks': np.ones((1,), dtype=bool)
-            },
+            'img_shape': (100, 100, 3),
+            'bboxes': np.array([[10, 10, 50, 50]], dtype=np.int32),
             'filename': 'int_bbox.jpg'
         }
         
@@ -250,5 +224,5 @@ class TestBboxEncode:
         result = transform.transform(data)
         
         # Should work and produce float32 normalized output
-        assert result['bbox'].dtype == np.float32
-        assert result['bbox'].shape == (1, 4)
+        assert result['bboxes'].dtype == np.float32
+        assert result['bboxes'].shape == (1, 4)

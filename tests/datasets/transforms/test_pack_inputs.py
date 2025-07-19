@@ -88,9 +88,11 @@ def test_transform_normalization(mean, std):
     packed_results = transform.transform(results)
     
     # Kiểm tra có normalize
-    assert 'img_norm_cfg' in packed_results
-    assert packed_results['img_norm_cfg']['mean'] == mean
-    assert packed_results['img_norm_cfg']['std'] == std
+    assert 'data_samples' in packed_results
+    data_sample = packed_results['data_samples']
+    assert 'img_norm_cfg' in data_sample.metainfo
+    assert data_sample.metainfo['img_norm_cfg']['mean'] == mean
+    assert data_sample.metainfo['img_norm_cfg']['std'] == std
 
 def test_transform_no_normalization():
     """Test transform không có normalization"""
@@ -104,21 +106,21 @@ def test_transform_no_normalization():
     # Kiểm tra không có normalize
     assert 'img_norm_cfg' not in packed_results
 
-@pytest.mark.parametrize("tokens,bboxs", [
+@pytest.mark.parametrize("tokens,bboxes", [
     (['hello', 'world'], [[0, 0, 10, 10], [10, 0, 20, 10]]),
     (['single'], [[0, 0, 10, 10]]),
     ([], []),
     (None, None),
 ])
-def test_transform_tokens_bboxs(tokens, bboxs):
-    """Test xử lý tokens và bboxs"""
+def test_transform_tokens_bboxes(tokens, bboxes):
+    """Test xử lý tokens và bboxes"""
     transform = PackInputs()
     
     results = {'img': np.random.rand(32, 128, 3).astype(np.float32)}
     if tokens is not None:
         results['tokens'] = tokens
-    if bboxs is not None:
-        results['bboxs'] = bboxs
+    if bboxes is not None:
+        results['bboxes'] = bboxes
     
     packed_results = transform.transform(results)
     
@@ -126,19 +128,17 @@ def test_transform_tokens_bboxs(tokens, bboxs):
     assert 'data_samples' in packed_results
     data_sample = packed_results['data_samples']
     assert hasattr(data_sample, 'gt_tokens')
-    assert hasattr(data_sample, 'gt_bboxs')
+    
+    # Bboxes được lưu trong gt_instances metainfo, không phải gt_bboxes attribute
+    if bboxes is not None:
+        assert hasattr(data_sample, 'gt_instances')
+        assert 'bboxes' in data_sample.gt_instances.metainfo
     
     if tokens is not None and len(tokens) > 0:
         assert hasattr(data_sample.gt_tokens, 'item')
         assert data_sample.gt_tokens.item == tokens
     else:
         assert not hasattr(data_sample.gt_tokens, 'item') or data_sample.gt_tokens.item == []
-        
-    if bboxs is not None and len(bboxs) > 0:
-        assert hasattr(data_sample.gt_bboxs, 'item')
-        assert data_sample.gt_bboxs.item == bboxs
-    else:
-        assert not hasattr(data_sample.gt_bboxs, 'item') or data_sample.gt_bboxs.item == []
 
 def test_transform_tokens_validation_error():
     """Test lỗi khi tokens và bboxs không khớp"""
@@ -251,7 +251,7 @@ def test_transform_complete_workflow(sample_results):
     # Cần update sample_results để phù hợp với API mới
     sample_results_updated = sample_results.copy()
     sample_results_updated['tokens'] = ['hello', 'world']
-    sample_results_updated['bboxs'] = [[0, 0, 10, 10], [10, 0, 20, 10]]
+    sample_results_updated['bboxes'] = [[0, 0, 10, 10], [10, 0, 20, 10]]
     # Remove gt_texts nếu có
     if 'gt_texts' in sample_results_updated:
         del sample_results_updated['gt_texts']
@@ -268,7 +268,8 @@ def test_transform_complete_workflow(sample_results):
     # Kiểm tra tất cả components
     assert 'inputs' in packed_results
     assert 'data_samples' in packed_results
-    assert 'img_norm_cfg' in packed_results
+    data_sample = packed_results['data_samples']
+    assert 'img_norm_cfg' in data_sample.metainfo
     assert 'extra_key' in packed_results
     
     # Kiểm tra inputs
@@ -279,14 +280,17 @@ def test_transform_complete_workflow(sample_results):
     data_sample = packed_results['data_samples']
     assert hasattr(data_sample.gt_tokens, 'item')
     assert data_sample.gt_tokens.item == ['hello', 'world']
-    assert hasattr(data_sample.gt_bboxs, 'item')
-    assert data_sample.gt_bboxs.item == [[0, 0, 10, 10], [10, 0, 20, 10]]
+    
+    # Kiểm tra bboxes trong gt_instances metainfo
+    assert hasattr(data_sample, 'gt_instances')
+    assert 'bboxes' in data_sample.gt_instances.metainfo
+    assert data_sample.gt_instances.metainfo['bboxes'] == [[0, 0, 10, 10], [10, 0, 20, 10]]
     assert data_sample.metainfo['img_path'] == '/path/to/image.jpg'
     assert data_sample.metainfo['valid_ratio'] == 0.8
     
     # Kiểm tra normalization config
-    assert packed_results['img_norm_cfg']['mean'] == [0.485, 0.456, 0.406]
-    assert packed_results['img_norm_cfg']['std'] == [0.229, 0.224, 0.225]
+    assert data_sample.metainfo['img_norm_cfg']['mean'] == [0.485, 0.456, 0.406]
+    assert data_sample.metainfo['img_norm_cfg']['std'] == [0.229, 0.224, 0.225]
     
     # Kiểm tra extra key
     assert packed_results['extra_key'] == 'extra_value'

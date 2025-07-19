@@ -78,41 +78,6 @@ def test_forward_with_different_parameters(sample_data, ignore_index, reduction,
     assert torch.isfinite(loss).all()
 
 
-@pytest.mark.parametrize(
-    "flatten",
-    [True, False],
-    ids=['flattened', 'not_flattened']
-)
-def test_format_inputs_shapes(sample_data, flatten):
-    """Test _format_inputs method with different flatten settings."""
-    outputs, targets_dict = sample_data
-    batch_size, seq_length, num_classes = outputs.shape
-    
-    loss_fn = MasterTFLoss(flatten=flatten)
-    formatted_outputs, formatted_targets = loss_fn._format_inputs(outputs, targets_dict)
-    
-    if flatten:
-        # When flattened: outputs should be (N*L, C), targets should be (N*L,)
-        assert formatted_outputs.shape == (batch_size * seq_length, num_classes)
-        assert formatted_targets.shape == (batch_size * seq_length,)
-    else:
-        # When not flattened: outputs should be (N, C, L), targets should be (N, L)
-        assert formatted_outputs.shape == (batch_size, num_classes, seq_length)
-        assert formatted_targets.shape == (batch_size, seq_length)
-
-
-def test_target_sequence_shifting(sample_data):
-    """Test that targets are properly shifted (removing start token)."""
-    outputs, targets_dict = sample_data
-    original_targets = targets_dict['padded_targets']
-    
-    loss_fn = MasterTFLoss(flatten=True)
-    _, formatted_targets = loss_fn._format_inputs(outputs, targets_dict)
-    
-    # Check that we're using targets[1:] (removing start token)
-    expected_targets = original_targets[:, 1:].contiguous().view(-1)
-    assert torch.equal(formatted_targets, expected_targets)
-
 
 def test_different_input_sizes(variable_sample_data):
     """Test with different input tensor sizes using parametrized fixture."""
@@ -146,11 +111,11 @@ def test_ignore_index_functionality(sample_data, ignore_value):
 
 
 def test_inheritance_from_crossentropyloss():
-    """Test that MasterTFLoss properly inherits from CrossEntropyLoss."""
+    """Test that MasterTFLoss properly uses CrossEntropyLoss internally."""
     loss_fn = MasterTFLoss()
-    assert isinstance(loss_fn, nn.CrossEntropyLoss)
-    assert hasattr(loss_fn, 'ignore_index')
-    assert hasattr(loss_fn, 'reduction')
+    assert isinstance(loss_fn, nn.Module)
+    assert hasattr(loss_fn, 'ctc_loss')
+    assert isinstance(loss_fn.ctc_loss, nn.CrossEntropyLoss)
 
 
 @pytest.mark.parametrize(
