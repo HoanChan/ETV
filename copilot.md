@@ -4,8 +4,8 @@ Tôi đã chạy được task `test train`, nhưng chưa chắc chắn tính đ
 
 ### 1. **Thông tin và chuẩn bị**
 
-* Đọc nội dung ở **info.md** để nắm thông tin tổng quát về dự án.
-* Đọc toàn bộ mã nguồn trong **src** (mã mới) và **old** (mã cũ).
+* Đọc nội dung ở #file:info.md  để nắm thông tin tổng quát về dự án.
+* Đọc toàn bộ mã nguồn trong #file:src  (mã mới) và #file:old  (mã cũ).
 
 ### 2. **Yêu cầu công việc**
 
@@ -22,14 +22,14 @@ Tôi đã chạy được task `test train`, nhưng chưa chắc chắn tính đ
 * Kiểm tra các test hiện có liên quan đến file đang xét:
 
   * Test nào **lỗi thời** do code thay đổi → **Cập nhật lại**.
-  * Test nào **dùng mock không cần thiết** → **Thay bằng đối tượng thực tế**.
+  * Test nào **dùng mock** → **Thay bằng đối tượng thực tế**.
   * Test nào **thiếu hoặc không hợp lý** → **Viết lại hoặc bổ sung mới**.
 
 * **Thêm test mới** nếu file chưa có test.
 
 * Test cần **ngắn gọn, rõ ràng, sát thực tế** và tập trung vào **chức năng chính**.
 
-* **Không dùng class** trong test, chỉ dùng hàm đơn giản. 
+* **Không dùng hay tạo class** trong test, chỉ dùng hàm đơn giản, nếu thấy class thì bỏ đi. 
 
 * Sử dụng **pytest.mark.parametrize** để giúp test ngắn gọn và dễ bảo trì.
 
@@ -39,15 +39,15 @@ Tôi đã chạy được task `test train`, nhưng chưa chắc chắn tính đ
 
 #### c. **Báo cáo**
 
-* Với mỗi file xử lý, tạo báo cáo trong thư mục **docs/report/**, nội dung viết bằng Tiếng Việt.
+* Với mỗi nhóm file đã xử lý, tạo báo cáo trong thư mục **docs/report/**, nội dung viết bằng Tiếng Việt.
 
 ### 3. **Nguyên tắc**
 
-* Không test lan man hoặc dư thừa.
-* Chỉ test đúng các tính năng mà file đó chịu trách nhiệm.
+* Quan trọng nhất là đảm bảo chức năng của code mới sẽ hoạt động như code cũ.
+* Không được thay đổi logic của code, test sai thì sửa test, chỉ sửa code khi nó không đúng logic với code cũ.
+* Không test lan man, dư thừa hoặc quá cứng nhắc.
+* Chỉ test đúng các tính năng mà file đó chịu trách nhiệm, khi có sự kế thừa của các class thì chỉ cần test các chức năng mới hoặc khác biệt, không cần test lại toàn bộ.
 * Ưu tiên tính rõ ràng, dễ hiểu, và dễ bảo trì.
-* Toàn bộ code phải có test đầy đủ, không bỏ sót chức năng nào.
-
----
+* Toàn bộ code phải có test đầy đủ.
 
 **Hãy bắt đầu thực hiện theo hướng dẫn trên, tuần tự từng file trong thư mục `src`.**
