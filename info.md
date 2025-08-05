@@ -1,3 +1,7 @@
+# Dự án nhận diện cấu trúc bảng TableMaster
+
+Code được viết trên mmOCR 1.0.1, nâng cấp từ phiên bản mmOCR 0.2.0.
+
 # Thông tin chung
 
 - Thư mục `old` chứa project TableMaster ở phiên bản `mmOCR 0.2.0`.
@@ -21,5 +25,3 @@
 
 - Để đảm bảo được kết quả kết quả là như nhau ở 2 phiên bản, cần giữ nguyên toàn bộ cấu trúc mô hình, từ việc nhận input tới việc sinh output.
 - Các hàm loss và metric cũng cần giữ nguyên để đảm bảo tính tương thích với các mô hình đã huấn luyện trước đó.
-
-
