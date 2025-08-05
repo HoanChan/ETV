@@ -40,6 +40,16 @@ data_pipeline = [
         with_label=True,
     ),
     dict(type='LoadImageFromFile', color_type='color_ignore_orientation'),
+    dict(
+        type='TorchVisionWrapper',
+        op='ColorJitter',
+        brightness=32.0 / 255,
+        saturation=0.5),
+    dict(
+        type='ImgAugWrapper',
+        args=[['Fliplr', 0.5],
+              dict(cls='Affine', rotate=[-10, 10]), ['Resize', [0.5, 3.0]]]),
+    dict(type='RandomCrop', min_side_ratio=0.1),
     dict(type='Resize', scale=(640, 640), keep_ratio=True),
     dict(type='Pad', size=(640, 640)),
     dict(
