@@ -152,9 +152,9 @@ model = dict(
                     is_att_scale=False,             # = gcb_config['att_scale'] = False  
                     fusion_type='channel_add'),     # = gcb_config['fusion_type'] = 'channel_add'
                 position='after_conv2')),           # Áp dụng sau conv2 trong BasicBlock
-        arch_layers=[1, 2, 5, 3],                  # = layers=[1,2,5,3] - số blocks trong mỗi stage
-        arch_channels=[256, 256, 512, 512],        # Channels: layer1=256, layer2=256, layer3=512, layer4=512
-        strides=[1, 1, 1, 1],                      # Tất cả stride=1 giống TableResNetExtra
+        arch_layers=[1, 2, 5, 3],                   # = layers=[1,2,5,3] - số blocks trong mỗi stage
+        arch_channels=[256, 256, 512, 512],         # Channels: layer1=256, layer2=256, layer3=512, layer4=512
+        strides=[1, 1, 1, 1],                       # Tất cả stride=1 giống TableResNetExtra
         plugins=[
             dict(# MAXPOOL PLUGIN 1 - Thay thế maxpool1 & maxpool2 trong TableResNetExtra
                 cfg=dict(type='Maxpool2d', kernel_size=2, stride=(2, 2)),
@@ -222,7 +222,7 @@ model = dict(
         max_len=5000
     ),
     decoder=dict(
-        type='TableMasterConcatDecoder', # file:///./../models/decoders/table_master_concat_decoder.py
+        type='TableMasterDecoder', # file:///./../models/decoders/table_master_decoder.py
         n_layers=3,
         n_head=8,
         d_model=512,
@@ -281,9 +281,7 @@ custom_imports = dict(
         'datasets.transforms.pack_inputs',
         'datasets.transforms.bbox_encode',
         'datasets.transforms.pad_data',
-        'models.backbones.resnet_extra',
-        'models.backbones.table_resnet_extra',
-        'models.decoders.table_master_concat_decoder',
+        'models.decoders.table_master_decoder',
         'models.dictionaries.table_master_dictionary',
         'models.encoders.positional_encoding',
         'models.losses.master_tf_loss',
@@ -291,7 +289,6 @@ custom_imports = dict(
         'models.metrics.teds_metric',
         'models.postprocessors.table_master_postprocessor',
         'models.recognizer.table_master',
-        'optimizer.ranger',
         'structures.table_master_data_sample',
         'visualization.table_master_visualizer',
     ],
